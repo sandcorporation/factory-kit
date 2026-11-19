@@ -167,7 +167,7 @@ eq "no ticket approved" "" "$(approved)"
 eq "nothing dispatched" "" "$(dispatched)"
 lacks "no merge call" "/merge" "$(calls)"
 has "report on the PR" "메뉴 자리가 갈린다" "$(pr_comments)"
-eq "spec keeps wait:decision" "wait:decision,kind:spec" "$(labels_of 50)"
+eq "spec keeps wait:decision" "kind:spec,wait:decision" "$(labels_of 50)"
 
 # --- pass: merge, approve, dispatch the lowest unblocked ticket -----------------------------------
 

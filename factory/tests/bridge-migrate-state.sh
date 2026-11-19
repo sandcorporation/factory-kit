@@ -96,7 +96,7 @@ has "table: factory-paused" "factory-paused → wait:budget  1" "$out"
 has "table: human-check" "human-check → wait:check  1" "$out"
 eq "backup is the file before" "$before" "$(cat "$sent.before-label-rename")"
 eq "no old name left" 0 "$(grep -cE ' (ready-for-human|needs-decision|factory-paused|human-check) ' "$sent")"
-has "the human-check marker comment id is kept" "61 " "$(cat "$sent")"
+eq "the human-check marker comment id is kept" 1 "$(grep -cx '61' "$sent")"
 has "a person's own label stays 'human'" "label 302 state:human 2026-11-18T01:10:00Z human" "$(cat "$sent")"
 run_bridge
 eq code 0 "$(cat "$tmp/code")"
