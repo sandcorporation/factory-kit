@@ -1,0 +1,182 @@
+# 공장을 쓰는 저장소에 두는 caller workflow 다섯 개.
+#
+# 이 파일은 `---`로 나눈 다섯 문서다. 문서마다 머리의 경로로 따로 저장한다.
+# 파일 이름을 바꾸지 않는다: 공장 스크립트가 다른 workflow를 이 파일 이름으로 띄운다
+# (`factory/dispatch-next.sh:157`, `factory/decompose.sh:152`, `factory/verify.sh:316`, `factory/resume.sh:96`).
+# 다른 이름을 쓰려면 `.github/factory.yml`의 `env.FACTORY_*_WORKFLOW`로 알린다(docs/config.md).
+#
+# - `uses:`의 태그와 `kit-ref`는 같은 값으로 고정한다. `uses:`는 workflow 파일을, `kit-ref`는
+#   workflow가 내려받을 `factory/` 스크립트를 정한다.
+# - 재사용 workflow의 권한은 caller 잡이 준 권한을 넘지 못하므로 잡마다 `permissions`를 적는다
+#   (docs/permissions.md).
+# - 재사용 workflow의 `run-name`은 쓰이지 않으므로 caller가 같은 식을 적는다. 공장 스크립트가
+#   run 제목(`implement #N (track T)` 등)을 읽어 바쁜 트랙과 티켓을 찾는다(`factory/dispatch-next.sh:118-150`).
+# - secrets 셋은 저장소 secret으로 둔다(README.md).
+
+# 파일: .github/workflows/factory-decompose.yml
+name: factory-decompose
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Spec issue number to decompose
+        type: string
+        required: false
+jobs:
+  factory:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+      id-token: write
+    uses: sandcorporation/factory-kit/.github/workflows/factory-decompose.yml@v0.1.0
+    with:
+      kit-repository: sandcorporation/factory-kit
+      kit-ref: v0.1.0
+      issue: ${{ inputs.issue }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+---
+# 파일: .github/workflows/factory-implementer.yml
+name: factory-implementer
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+  && format('implement #{0} (track {1})', inputs.issue, inputs.track || '1')
+  || format('factory-implementer {0}', github.event_name) }}
+on:
+  issues:
+    types: [closed, labeled]
+  schedule:
+    - cron: '5 15 * * *' # UTC 15:05 = KST 00:05, 하루 예산이 새로 찬 뒤
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Ticket number to implement
+        type: string
+        required: false
+      track:
+        description: Implementer track (1..FACTORY_TRACKS)
+        type: string
+        required: false
+      mode:
+        description: auto, implement or conflict (empty = auto)
+        type: string
+        required: false
+jobs:
+  factory:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+      id-token: write
+    uses: sandcorporation/factory-kit/.github/workflows/factory-implementer.yml@v0.1.0
+    with:
+      kit-repository: sandcorporation/factory-kit
+      kit-ref: v0.1.0
+      issue: ${{ inputs.issue }}
+      track: ${{ inputs.track }}
+      mode: ${{ inputs.mode }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+---
+# 파일: .github/workflows/factory-odin.yml
+name: factory-odin
+run-name: 'odin #${{ inputs.spec }}'
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: Spec issue number
+        type: string
+        required: true
+      mode:
+        description: review (default) or conflict
+        type: string
+        required: false
+jobs:
+  factory:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+      id-token: write
+    uses: sandcorporation/factory-kit/.github/workflows/factory-odin.yml@v0.1.0
+    with:
+      kit-repository: sandcorporation/factory-kit
+      kit-ref: v0.1.0
+      spec: ${{ inputs.spec }}
+      mode: ${{ inputs.mode }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+---
+# 파일: .github/workflows/factory-resume.yml
+name: factory-resume
+on:
+  issues:
+    types: [unlabeled]
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: Spec issue number to resume
+        type: string
+        required: false
+jobs:
+  factory:
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      actions: write
+    uses: sandcorporation/factory-kit/.github/workflows/factory-resume.yml@v0.1.0
+    with:
+      kit-repository: sandcorporation/factory-kit
+      kit-ref: v0.1.0
+      spec: ${{ inputs.spec }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+---
+# 파일: .github/workflows/factory-verify.yml
+name: factory-verify
+run-name: 'verify #${{ inputs.issue }} (PR #${{ inputs.pr }})'
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Ticket number
+        type: string
+        required: true
+      pr:
+        description: Pull request number
+        type: string
+        required: true
+jobs:
+  factory:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+      id-token: write
+    uses: sandcorporation/factory-kit/.github/workflows/factory-verify.yml@v0.1.0
+    with:
+      kit-repository: sandcorporation/factory-kit
+      kit-ref: v0.1.0
+      issue: ${{ inputs.issue }}
+      pr: ${{ inputs.pr }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}

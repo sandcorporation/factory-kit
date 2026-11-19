@@ -1,0 +1,41 @@
+# .github/factory.yml 예시. 키와 기본값은 docs/config.md.
+# 들여쓰기는 공백 2칸, 모르는 키가 있으면 config.sh가 멈춘다. 쓰지 않는 키는 빼면 기본값이다.
+
+base: main # 지금은 main만 쓸 수 있다(docs/config.md 「어긋남」)
+
+runners:
+  default: ubuntu-latest
+  implement: windows-latest # 구현·Odin 잡
+  verify: windows-latest
+
+# 작업 잡이 코드를 돌리기 전에 실행할 명령
+setup: |
+  rustup show
+  cargo fetch --locked
+
+cache: rust # 지금은 rust만 알아듣는다
+
+checks:
+  full: cargo xtask ci # 머지 전 자동 검사 전체
+  quick: cargo xtask ci --only lint # Odin의 빠른 검사
+  kill: taskkill /F /IM myapp.exe || true # 검사 전에 남은 프로세스 정리
+
+git:
+  name: factory[bot]
+  email: 41898282+github-actions[bot]@users.noreply.github.com
+
+models:
+  default: claude-sonnet-5-5
+  strong: claude-opus-5-5 # model:strong 라벨 티켓, 앞서 실패한 티켓
+  verify: claude-sonnet-5-5
+
+turns:
+  implement: 200
+  verify: 40
+
+labels:
+  scan: .github/
+
+# 작업 잡에 그대로 넘어갈 환경 변수
+env:
+  CARGO_TERM_COLOR: always
