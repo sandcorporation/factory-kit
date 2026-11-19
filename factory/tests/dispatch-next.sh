@@ -69,7 +69,7 @@ run --candidates "65" --tickets-only
 eq "lowest of both" 62 "$(dispatched)"
 
 setup "a candidate without state:ready or closed does not start"
-issue 61 model:sonnet
+issue 61 ""
 issue 62 state:ready
 jq '.state = "closed"' "$FAKE_GH/issue-62.json" | tr -d '\r' > "$FAKE_GH/x" && mv "$FAKE_GH/x" "$FAKE_GH/issue-62.json"
 touch "$FAKE_GH/list-empty"

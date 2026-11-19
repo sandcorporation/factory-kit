@@ -167,8 +167,8 @@ eq sends 1 "$(sent_count)"
 eq subject "[facet 공장] 사람 확인: #311 확인 남음" "$(arg 0 --subject)"
 
 setup "queue done and no ticket: idle is sent once"
-issue 249 closed spec "공장 개선"
-issue 250 closed spec "검색"
+issue 249 closed kind:spec "공장 개선"
+issue 250 closed kind:spec "검색"
 issue 260 closed state:ready "끝난 티켓"
 export FACTORY_SPEC_QUEUE="249 250"
 run
@@ -180,17 +180,17 @@ has subject "공장 idle" "$(arg 0 --subject)"
 run
 eq "once per queue" 1 "$(sent_count)"
 export FACTORY_SPEC_QUEUE="249,250 251"
-issue 251 closed spec "다음"
+issue 251 closed kind:spec "다음"
 run
 eq "a new queue value is a new mail" 2 "$(sent_count)"
 
 setup "idle is not sent while a queue spec is open or a ticket waits"
-issue 249 closed spec "공장 개선"
-issue 250 open spec "검색"
+issue 249 closed kind:spec "공장 개선"
+issue 250 open kind:spec "검색"
 export FACTORY_SPEC_QUEUE="249 250"
 run
 eq "open spec" 0 "$(sent_count)"
-issue 250 closed spec "검색"
+issue 250 closed kind:spec "검색"
 issue 270 open state:running "도는 티켓"
 run
 eq "running ticket" 0 "$(sent_count)"
@@ -201,7 +201,7 @@ eq "waiting ticket" 0 "$(sent_count)"
 eq code 0 "$(code)"
 
 setup "an idle marker and the direct idle check of the same queue send one mail"
-issue 249 closed spec "공장 개선"
+issue 249 closed kind:spec "공장 개선"
 issue 900 open kind:ledger "장부"
 export FACTORY_SPEC_QUEUE="249"
 comment 21 900 "<!-- factory-idle 249 -->
@@ -274,7 +274,7 @@ eq profile custom "$(jq -s -r '.[0].profile' "$FAKE_MAIL/sent.jsonl" | tr -d '\r
 setup "needs-triage, needs-info, local and closed issues are not sent"
 issue 401 open needs-triage "분류 전"
 issue 402 open needs-info "정보 필요"
-issue 403 open local "로컬"
+issue 403 open kind:local "로컬"
 issue 404 closed state:human "닫힘"
 run
 eq code 0 "$(code)"
@@ -480,7 +480,7 @@ issue 249 open wait:decision "공장 개선"
 labeled 249 wait:decision 2026-11-18T01:00:00Z
 issue 301 open state:human "티켓 하나"
 labeled 301 state:human 2026-11-18T01:00:00Z
-issue 250 closed spec "검색"
+issue 250 closed kind:spec "검색"
 markers
 comment 40 900 "<!-- factory-stalled 2026-11-18 -->" stranger
 export FACTORY_SPEC_QUEUE=250 BRIDGE_CC=test/cc1
@@ -657,7 +657,7 @@ setup "every old state line form is read without sending again (#492)"
 markers
 issue 301 open state:human "티켓 하나"
 labeled 301 state:human 2026-11-18T01:00:00Z
-issue 250 closed spec "검색"
+issue 250 closed kind:spec "검색"
 export FACTORY_SPEC_QUEUE=250
 mkdir -p "$XDG_STATE_HOME/facet-factory-bridge"
 printf '13\n14 test/coord\n15 ignored\n16\nlabel 301 state:human 2026-11-18T01:00:00Z test/coord\nidle 250 test/coord\nlabels-seeded\n' \

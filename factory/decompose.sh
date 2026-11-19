@@ -17,11 +17,11 @@
 #                                   `wait:decision`, stops: result=question, no commit, no PR, no dispatch.
 #                                   Otherwise commits the acceptance tests (crates/*/tests/spec_*.rs only) on
 #                                   factory/spec-<S>, pushes it, opens the spec PR (title "스펙: <title> 인수 시험
-#                                   (#S)", label `spec-pr`, body `Refs #S` and the ticket list) and dispatches Odin:
+#                                   (#S)", body `Refs #S` and the ticket list) and dispatches Odin:
 #                                   result=pr, pr=<number>.
 #   decompose.sh budget <S>         when the spec body has no `예산:` line, appends `예산: $N` (whole dollars, rounded
 #                                   up): the spec's fixed share plus a price per sub-issue by its model label
-#                                   (`model:strong`, else the `model:sonnet` price). A line already there (written by a
+#                                   (`model:strong`, else the default-model price). A line already there (written by a
 #                                   person or an earlier run) is left alone, so running it again changes nothing.
 #                                   `finish` calls it before opening the spec PR; a failure only warns.
 #   decompose.sh dispatch-odin <S>  dispatch factory-odin.yml with input spec=<S>. A failed dispatch (the workflow
@@ -34,12 +34,13 @@
 #                              (Decompose $10.80, two Odin runs $17.56)
 #   FACTORY_BUDGET_OPUS_USD    per `model:strong` ticket, default 10: Implement+Verify of a finished opus ticket
 #                              cost $8~$9.5 on spec #28
-#   FACTORY_BUDGET_SONNET_USD  per other ticket (`model:sonnet` or none), default 3: a finished sonnet ticket
+#   FACTORY_BUDGET_SONNET_USD  per other ticket (no model label: the default model), default 3: a finished sonnet ticket
 #                              cost $1.5~$3 on spec #28
 # A spec that never went through Decompose has no line and keeps ledger.sh's floor ($60).
 # Needs bash, git, gh, jq and awk.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib/labels.sh"
 REPO=${REPO:-${GITHUB_REPOSITORY:-}}
 BASE=${BASE:-main}
 ROOT=${FACTORY_ROOT:-$(cd "$here/../.." && pwd)}
@@ -81,7 +82,7 @@ has_tests() {
 
 state() {
   local s=$1 pr n missing=
-  if has_label "$s" wait:decision; then output mode=question; return; fi
+  if has_label "$s" "${L_DECISION}"; then output mode=question; return; fi
   pr=$(spec_pr "$s")
   if [ -n "$pr" ]; then output mode=specpr; output "pr=$pr"; return; fi
   if [ "$(sub_issue_count "$s")" -eq 0 ]; then output mode=new; return; fi
@@ -116,7 +117,7 @@ budget() {
     return 0
   fi
   for n in $(all_tickets "$s"); do
-    if has_label "$n" model:strong; then opus=$((opus + 1)); else sonnet=$((sonnet + 1)); fi
+    if has_label "$n" "${L_STRONG}"; then opus=$((opus + 1)); else sonnet=$((sonnet + 1)); fi
   done
   if [ $((opus + sonnet)) -eq 0 ]; then
     echo "::warning::#$s has no tickets; no budget line"
@@ -157,14 +158,14 @@ finish() {
   done
   if [ "$mode" = decomposed ]; then
     for n in $tickets; do
-      if has_label "$n" state:ready; then
+      if has_label "$n" "${L_READY}"; then
         gh api -X DELETE "repos/$REPO/issues/$n/labels/state:ready" > /dev/null \
-          || echo "::warning::could not remove state:ready from #$n"
+          || echo "::warning::could not remove ${L_READY} from #$n"
       fi
     done
   fi
-  if has_label "$s" wait:decision; then
-    echo "::notice::#$s asks a question (wait:decision); no spec PR"
+  if has_label "$s" "${L_DECISION}"; then
+    echo "::notice::#$s asks a question (${L_DECISION}); no spec PR"
     output result=question
     return 0
   fi
@@ -206,8 +207,6 @@ $list"
   pr=$(gh api "repos/$REPO/pulls" -f "title=스펙: $title 인수 시험 (#$s)" -f "head=$branch" -f "base=$BASE" \
     -f "body=$body" | j -r '.number // empty')
   if [ -z "$pr" ]; then echo "::error::could not open the spec PR of #$s"; return 1; fi
-  gh api "repos/$REPO/issues/$pr/labels" -f 'labels[]=spec-pr' > /dev/null \
-    || echo "::warning::could not label PR #$pr spec-pr"
   echo "opened spec PR #$pr"
   output result=pr
   output "pr=$pr"

@@ -90,7 +90,7 @@ eq action skip "$(out action)"
 eq dispatches "" "$(dispatched)"
 
 setup "a spec over its budget does not resume"
-issue 249 spec "예산: \$10"
+issue 249 kind:spec "예산: \$10"
 issue 900 kind:ledger
 ledger_comment 249 12
 run 249
@@ -100,7 +100,7 @@ eq dispatches "" "$(dispatched)"
 # --- decompose / odin ----------------------------------------------------------------------
 
 setup "a spec without sub-issues is decomposed again"
-issue 249 spec
+issue 249 kind:spec
 run 249
 eq code 0 "$(code)"
 eq action decompose "$(out action)"
@@ -108,7 +108,7 @@ eq dispatches "factory-decompose.yml;" "$(dispatched)"
 eq input 1 "$(grep -c 'inputs\[issue\]=249' "$FAKE_GH/calls.log")"
 
 setup "open tickets without acceptance tests are decomposed again"
-issue 249 spec
+issue 249 kind:spec
 subs 249 301:open 302:open
 tested 301
 run 249
@@ -116,7 +116,7 @@ eq action decompose "$(out action)"
 eq dispatches "factory-decompose.yml;" "$(dispatched)"
 
 setup "an open spec PR goes to Odin"
-issue 249 spec
+issue 249 kind:spec
 subs 249 301:open
 pull 43 open factory/spec-249
 run 249
@@ -126,7 +126,7 @@ eq dispatches "factory-odin.yml;" "$(dispatched)"
 eq input 1 "$(grep -c 'inputs\[spec\]=249' "$FAKE_GH/calls.log")"
 
 setup "a failed Odin dispatch only warns"
-issue 249 spec
+issue 249 kind:spec
 pull 43 open factory/spec-249
 touch "$FAKE_GH/fail-dispatch"
 run 249
@@ -136,7 +136,7 @@ eq action odin "$(out action)"
 # --- approved tickets ----------------------------------------------------------------------
 
 setup "an state:running ticket with the Implementer's checked PR goes to Verify"
-issue 249 spec
+issue 249 kind:spec
 subs 249 301:closed 302:open 303:open
 tested 302; tested 303
 issue 302 state:running
@@ -155,7 +155,7 @@ eq "inputs" 1 "$(grep -c 'inputs\[issue\]=302 -f inputs\[pr\]=61' "$FAKE_GH/call
 eq next 0 "$(nexts)"
 
 setup "an state:running ticket whose PR is not checked yet continues the chain"
-issue 249 spec
+issue 249 kind:spec
 subs 249 302:open
 tested 302
 issue 302 state:running
@@ -166,7 +166,7 @@ eq dispatches "" "$(dispatched)"
 eq next 1 "$(nexts)"
 
 setup "a checked PR of another ticket (#3020) does not count for #302"
-issue 249 spec
+issue 249 kind:spec
 subs 249 302:open
 tested 302
 issue 302 state:running
@@ -181,7 +181,7 @@ eq action next "$(out action)"
 eq dispatches "" "$(dispatched)"
 
 setup "approved tickets without a PR continue the chain"
-issue 249 spec
+issue 249 kind:spec
 subs 249 301:open 302:open
 tested 301; tested 302
 issue 301 state:ready
@@ -192,7 +192,7 @@ eq action next "$(out action)"
 eq next 1 "$(nexts)"
 
 setup "a failed Verify dispatch fails the run"
-issue 249 spec
+issue 249 kind:spec
 subs 249 302:open
 tested 302
 issue 302 state:running

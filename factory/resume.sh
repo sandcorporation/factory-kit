@@ -23,6 +23,7 @@
 # FACTORY_DISPATCH_NEXT replaces dispatch-next.sh (tests). Needs bash, gh and jq.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib/labels.sh"
 REPO=${REPO:-${GITHUB_REPOSITORY:-}}
 export REPO
 BASE=${BASE:-main}
@@ -66,7 +67,7 @@ in_progress_tickets() {
   local n
   for n in $(gh api "repos/$REPO/issues/$1/sub_issues?per_page=100" --paginate \
     | j -s -r 'add // [] | map(select(.state == "open") | .number) | sort | .[]'); do
-    if [ "$(gh api "repos/$REPO/issues/$n" | j -r 'any(.labels[]; .name == "state:running")')" = true ]; then
+    if [ "$(gh api "repos/$REPO/issues/$n" | j -r 'any(.labels[]; .name == "'"${L_RUNNING}"'")')" = true ]; then
       echo "$n"
     fi
   done

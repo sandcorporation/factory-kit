@@ -52,6 +52,7 @@
 # (seconds between merge attempts, default 15). Needs bash, git, gh and jq.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib/labels.sh"
 REPO=${REPO:-${GITHUB_REPOSITORY:-}}
 # Every send-back comment starts with this; `kind=` follows since #307 (none: acceptance).
 SENDBACK='<!-- factory-sendback'
@@ -191,17 +192,17 @@ $reason"
   else
     unmark_checked "$pr"
   fi
-  remove_label "$n" state:running
+  remove_label "$n" "${L_RUNNING}"
 
   count=$(sendback_count "$n" "$kind")
   if [ "${count:-0}" -ge "$limit" ]; then
-    bash "$here/hand-to-human.sh" "$n" "$code" "Verify가 이 티켓을 ${what}로 ${count}번 되돌렸다(사람 넘김 한도: ${what} ${limit}번). 공장은 더 돌리지 않는다: 사람이 위 되돌림 사유를 보고 티켓이나 인수 시험을 고치거나 충돌을 푼 뒤 \`state:human\`을 떼고 \`state:ready\`를 붙인다." || echo "::warning::could not hand #$n to a human"
+    bash "$here/hand-to-human.sh" "$n" "$code" "Verify가 이 티켓을 ${what}로 ${count}번 되돌렸다(사람 넘김 한도: ${what} ${limit}번). 공장은 더 돌리지 않는다: 사람이 위 되돌림 사유를 보고 티켓이나 인수 시험을 고치거나 충돌을 푼 뒤 \`${L_HUMAN}\`을 떼고 \`${L_READY}\`를 붙인다." || echo "::warning::could not hand #$n to a human"
     echo "#$n: $kind send-back $count of $limit, handed to a human"
     next_ticket
   else
-    add_label "$n" state:ready
+    add_label "$n" "${L_READY}"
     next_ticket --first "$n"
-    echo "#$n: $kind send-back $count of $limit, back to state:ready (dispatch-next.sh tries it first)"
+    echo "#$n: $kind send-back $count of $limit, back to ${L_READY} (dispatch-next.sh tries it first)"
   fi
 }
 
@@ -266,7 +267,7 @@ $(cat "$report")" >/dev/null || true
   comment "$n" "Merged in PR #$pr$(run_link)" || true
   gh api -X PATCH "repos/$REPO/issues/$n" -f state=closed -f state_reason=completed >/dev/null \
     || echo "::warning::could not close #$n"
-  remove_label "$n" state:running
+  remove_label "$n" "${L_RUNNING}"
   dispatch ci.yml || echo "::warning::could not dispatch ci.yml"
   dispatch release.yml || echo "::warning::could not dispatch release.yml"
   next_ticket
@@ -314,7 +315,7 @@ next_verify() {
   while read -r p n; do
     [ -n "${n:-}" ] || continue
     read -r state progress < <(gh api "repos/$REPO/issues/$n" \
-      | j -r '[.state, (any(.labels[]; .name == "state:running") | tostring)] | @tsv')
+      | j -r '[.state, (any(.labels[]; .name == "'"${L_RUNNING}"'") | tostring)] | @tsv')
     [ "${state:-}" = open ] && [ "${progress:-}" = true ] || continue
     # The Verify run started here would stop at its budget guard and, on its way out, start this
     # step again for the other waiting PR: two guarded PRs woke each other forever (#501). Ask the

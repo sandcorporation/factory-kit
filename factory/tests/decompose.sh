@@ -76,7 +76,7 @@ finish() { bash "$script" finish "$1" "$2" > "$tmp/log" 2>&1; echo $? > "$tmp/co
 # --- state ---------------------------------------------------------------------------------
 
 setup "state: a spec without sub-issues is new"
-issue 249 spec "공장 개선"
+issue 249 kind:spec "공장 개선"
 state 249
 eq mode new "$(out mode)"
 
@@ -87,7 +87,7 @@ state 249
 eq mode question "$(out mode)"
 
 setup "state: an open spec PR means Odin only, even with tickets lacking tests"
-issue 249 spec
+issue 249 kind:spec
 subs 249 301:open 302:open
 pull 41 closed factory/spec-249
 pull 42 open factory/spec-250
@@ -97,14 +97,14 @@ eq mode specpr "$(out mode)"
 eq pr 43 "$(out pr)"
 
 setup "state: closed or other specs' PRs do not count"
-issue 249 spec
+issue 249 kind:spec
 pull 41 closed factory/spec-249
 pull 42 open factory/spec-250
 state 249
 eq mode new "$(out mode)"
 
 setup "state: open tickets without an ignore marker in the checkout are decomposed"
-issue 249 spec
+issue 249 kind:spec
 subs 249 301:open 302:open 303:closed 304:open
 printf '#[test]\n#[ignore = "#304"]\nfn b() {}\n' > "$FACTORY_ROOT/crates/facet-core/tests/spec_new_x.rs"
 state 249
@@ -112,14 +112,14 @@ eq mode decomposed "$(out mode)"
 eq tickets 302 "$(out tickets)"
 
 setup "state: a marker of a longer number does not count (#30 vs #301)"
-issue 249 spec
+issue 249 kind:spec
 subs 249 30:open
 state 249
 eq mode decomposed "$(out mode)"
 eq tickets 30 "$(out tickets)"
 
 setup "state: every open ticket has its tests: done"
-issue 249 spec
+issue 249 kind:spec
 subs 249 301:open 302:closed
 state 249
 eq mode done "$(out mode)"
@@ -138,30 +138,30 @@ eq branch no "$(remote_branch 249)"
 
 setup "finish: a ticket that changes workflow files becomes state:human + kind:local"
 issue 249 kind:spec,wait:decision
-issue 301 model:sonnet ".github/workflows/ 에 단계를 더한다"
-issue 302 model:sonnet
+issue 301 "" ".github/workflows/ 에 단계를 더한다"
+issue 302 ""
 subs 249 301:open 302:open
 finish 249 decomposed
-eq "#301 labels" "model:sonnet,kind:kind:local,state:human" "$(labels_of 301)"
-eq "#302 labels" "model:sonnet" "$(labels_of 302)"
+eq "#301 labels" "kind:local,state:human" "$(labels_of 301)"
+eq "#302 labels" "" "$(labels_of 302)"
 
 setup "finish: a question (decomposed spec) also takes state:ready off the open tickets"
 issue 249 kind:spec,wait:decision
-issue 301 state:ready,model:sonnet
+issue 301 state:ready
 issue 302 state:ready
 issue 303 state:ready
 subs 249 301:open 302:open 303:closed
 finish 249 decomposed
 eq result question "$(out result)"
-eq "#301 labels" model:sonnet "$(labels_of 301)"
+eq "#301 labels" "" "$(labels_of 301)"
 eq "#302 labels" "" "$(labels_of 302)"
 eq "closed #303 labels" state:ready "$(labels_of 303)"
 eq "pull requests" 0 "$(pull_count)"
 eq dispatches 0 "$(dispatches)"
 
 setup "finish: a new spec gets the spec PR with only its acceptance tests, then Odin"
-issue 249 spec "비용 장부"
-issue 301 model:sonnet
+issue 249 kind:spec "비용 장부"
+issue 301 ""
 issue 302 model:strong
 subs 249 301:open 302:open
 echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_ledger_app.rs"
@@ -177,8 +177,8 @@ body=$(jq -r '.[0].body' "$FAKE_GH/pulls.json" | tr -d '\r')
 has "body" "Refs #249" "$body"
 has "body" "- #301" "$body"
 has "body" "- #302" "$body"
-eq "PR labels" spec-pr "$(labels_of 500)"
-eq "#301 labels" model:sonnet "$(labels_of 301)"
+eq "PR labels" "" "$(labels_of 500)"
+eq "#301 labels" "" "$(labels_of 301)"
 eq dispatches 1 "$(dispatches)"
 has "dispatch input" "inputs[spec]=249" "$(grep dispatches "$FAKE_GH/calls.log")"
 eq branch yes "$(remote_branch 249)"
@@ -187,7 +187,7 @@ eq "committed files" crates/facet-core/tests/spec_ledger_app.rs \
 has "stray warning" "outside the acceptance tests" "$(cat "$tmp/log")"
 
 setup "finish: a decomposed spec takes state:ready off and opens the spec PR"
-issue 249 spec
+issue 249 kind:spec
 issue 301 state:ready
 issue 302 state:ready,model:strong
 subs 249 301:open 302:open
@@ -199,7 +199,7 @@ eq "#302 labels" model:strong "$(labels_of 302)"
 eq dispatches 1 "$(dispatches)"
 
 setup "finish: a new spec keeps existing state:ready off its hands (only decomposed removes)"
-issue 249 spec
+issue 249 kind:spec
 issue 301 ""
 subs 249 301:open
 echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_a_b.rs"
@@ -208,7 +208,7 @@ eq "#301 labels" "" "$(labels_of 301)"
 eq "no label added" 0 "$(grep -c 'issues/301/labels' "$FAKE_GH/calls.log" || true)"
 
 setup "finish: a failed Odin dispatch only warns"
-issue 249 spec
+issue 249 kind:spec
 issue 301 ""
 subs 249 301:open
 echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_a_b.rs"
@@ -219,14 +219,14 @@ eq result pr "$(out result)"
 has "warning" "could not dispatch factory-odin.yml" "$(cat "$tmp/log")"
 
 setup "finish: no open tickets after a new decompose is an error, without a PR"
-issue 249 spec
+issue 249 kind:spec
 finish 249 new
 eq code 1 "$(cat "$tmp/code")"
 eq "pull requests" 0 "$(pull_count)"
 eq dispatches 0 "$(dispatches)"
 
 setup "dispatch-odin: dispatches factory-odin.yml with the spec"
-issue 249 spec
+issue 249 kind:spec
 bash "$script" dispatch-odin 249 > "$tmp/log" 2>&1
 eq code 0 "$?"
 eq dispatches 1 "$(dispatches)"
@@ -240,12 +240,12 @@ edits() { grep -c "PATCH repos/owner/repo/issues/$1 --input" "$FAKE_GH/calls.log
 tickets() {
   local s=$1 n=$2 i list=()
   for ((i = 0; i < $3; i++)); do issue "$n" model:strong; list+=("$n:open"); n=$((n + 1)); done
-  for ((i = 0; i < $4; i++)); do issue "$n" model:sonnet; list+=("$n:open"); n=$((n + 1)); done
+  for ((i = 0; i < $4; i++)); do issue "$n" ""; list+=("$n:open"); n=$((n + 1)); done
   subs "$s" "${list[@]}"
 }
 
 setup "budget: 2 opus + 9 sonnet tickets append one line above the \$60 default"
-issue 249 spec "압축 파일" "## 할 것
+issue 249 kind:spec "압축 파일" "## 할 것
 
 - 하나"
 tickets 249 301 2 9
@@ -262,9 +262,9 @@ v=$(body_of 249 | sed -n 's/^예산: \$//p')
 eq "over the default" yes "$([ "${v:-0}" -gt 60 ] && echo yes || echo no)"
 
 setup "budget: unlabeled tickets count as sonnet, closed tickets count too"
-issue 249 spec "" "본문
+issue 249 kind:spec "" "본문
 "
-issue 301 model:sonnet
+issue 301 ""
 issue 302 ""
 issue 303 model:strong
 subs 249 301:open 302:open 303:closed
@@ -275,14 +275,14 @@ eq body "본문
 예산: \$46" "$(body_of 249)"
 
 setup "budget: prices come from the environment and round up to whole dollars"
-issue 249 spec
+issue 249 kind:spec
 tickets 249 301 1 2
 FACTORY_BUDGET_SPEC_USD=20.5 FACTORY_BUDGET_OPUS_USD=8.2 FACTORY_BUDGET_SONNET_USD=1.5 budget 249
 # 20.5 + 8.2 + 2 x 1.5 = 31.7 -> 32; an empty body becomes the line alone
 eq body "예산: \$32" "$(body_of 249)"
 
 setup "budget: a line a person wrote is left alone"
-issue 249 spec "" "## 할 것
+issue 249 kind:spec "" "## 할 것
 
 예산: \$80
 
@@ -296,7 +296,7 @@ eq "body edits" 0 "$(edits 249)"
 has log "already has a budget line" "$(cat "$tmp/log")"
 
 setup "budget: running it twice writes one line"
-issue 249 spec "" "본문"
+issue 249 kind:spec "" "본문"
 tickets 249 301 1 1
 budget 249
 budget 249
@@ -306,14 +306,14 @@ eq body "본문
 eq "body edits" 1 "$(edits 249)"
 
 setup "budget: no tickets, no line"
-issue 249 spec "" "본문"
+issue 249 kind:spec "" "본문"
 budget 249
 eq body "본문" "$(body_of 249)"
 eq "body edits" 0 "$(edits 249)"
 
 setup "finish: a new spec gets its budget line before the spec PR"
-issue 249 spec "비용 장부" "본문"
-issue 301 model:sonnet
+issue 249 kind:spec "비용 장부" "본문"
+issue 301 ""
 issue 302 model:strong
 subs 249 301:open 302:open
 echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_ledger_app.rs"
@@ -325,15 +325,15 @@ eq body "본문
 
 setup "finish: a question writes no budget line"
 issue 249 kind:spec,wait:decision "" "본문"
-issue 301 model:sonnet
+issue 301 ""
 subs 249 301:open
 finish 249 new
 eq result question "$(out result)"
 eq body "본문" "$(body_of 249)"
 
 setup "finish: a failed budget edit only warns and the spec PR still opens"
-issue 249 spec "" "본문"
-issue 301 model:sonnet
+issue 249 kind:spec "" "본문"
+issue 301 ""
 subs 249 301:open
 echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_a_b.rs"
 touch "$FAKE_GH/fail-body-edit"

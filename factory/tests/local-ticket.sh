@@ -33,16 +33,16 @@ res() { sed -n 's/^local=//p' "$GITHUB_OUTPUT" | tail -n 1; }
 ncomments() { [ -f "$FAKE_GH/comments-$1.json" ] && jq length "$FAKE_GH/comments-$1.json" || echo 0; }
 
 setup "a ticket that names .github/workflows becomes state:human + kind:local"
-issue 80 state:ready,model:sonnet "CI 단계 추가" "ci.yml 대신 .github/workflows/factory-x.yml 을 고친다"
+issue 80 state:ready "CI 단계 추가" "ci.yml 대신 .github/workflows/factory-x.yml 을 고친다"
 bash "$script" 80 > /dev/null 2>&1; eq "exit" 0 $?
 eq "local" true "$(res)"
-eq "labels" "kind:local,model:sonnet,state:human" "$(labels 80)"
+eq "labels" "kind:local,state:human" "$(labels 80)"
 eq "one comment" 1 "$(ncomments 80)"
 eq "marker" "<!-- factory-human workflow-change -->|<!-- factory-local -->" "$(jq -r '.[0].body | split("
 ")[0:2] | join("|")' "$FAKE_GH/comments-80.json")"
 bash "$script" 80 > /dev/null 2>&1
 eq "again: no second comment" 1 "$(ncomments 80)"
-eq "again: labels the same" "kind:local,model:sonnet,state:human" "$(labels 80)"
+eq "again: labels the same" "kind:local,state:human" "$(labels 80)"
 
 has_text() { case "$3" in *"$2"*) eq "$1" ok ok ;; *) eq "$1" "[$2]" "[$3]" ;; esac; }
 has_text "workflow wording" "workflow 파일 — 로컬 작업자 몫" "$(jq -r '.[0].body' "$FAKE_GH/comments-80.json")"
@@ -66,7 +66,7 @@ eq "no comment" 0 "$(ncomments 85)"
 eq "hand-to-human not called" 0 "$(grep -c 'issues/85/labels' "$FAKE_GH/calls.log")"
 
 setup "a local ticket already handed over, whose state:human a person took off, is not handed over again"
-issue 86 local "코드 서명 인증서" "인증서와 비밀값을 사람이 준비한다"
+issue 86 kind:local "코드 서명 인증서" "인증서와 비밀값을 사람이 준비한다"
 jq -n '[{id: 1, created_at: "2026-11-17T00:00:00Z", body: "<!-- factory-human local-only -->\n<!-- factory-local -->\n까닭", user: {login: "github-actions[bot]"}}]' \
   | tr -d '\r' > "$FAKE_GH/comments-86.json"
 bash "$script" 86 > /dev/null 2>&1; eq "exit" 0 $?

@@ -14,6 +14,7 @@
 # Environment: REPO, GH_TOKEN.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib/labels.sh"
 : "${REPO:?REPO is not set}"
 n=${1:?usage: parent-check.sh <issue> [<sender login>]}
 sender=${2:-}
@@ -24,7 +25,7 @@ output() {
 
 labels=$(gh api "repos/$REPO/issues/$n" --jq '[.labels[].name] | join(",")' | tr -d '\r') \
   || { echo "::error::parent-check: could not read #$n"; exit 1; }
-case ",$labels," in *,kind:spec,*) output ok=true; exit 0 ;; esac
+case ",$labels," in *,"${L_SPEC}",*) output ok=true; exit 0 ;; esac
 
 if [ -n "$sender" ]; then
   case "$sender" in
@@ -42,8 +43,8 @@ p=$(bash "$here/ledger.sh" parent-of "$n" | tr -d '\r')
 if [ -n "$p" ]; then output ok=true; exit 0; fi
 
 gh api "repos/$REPO/issues/$n/labels/state:ready" -X DELETE > /dev/null \
-  || echo "::warning::parent-check: could not take state:ready off #$n"
+  || echo "::warning::parent-check: could not take ${L_READY} off #$n"
 gh api "repos/$REPO/issues/$n/comments" -f "body=<!-- factory-no-parent -->
-부모 spec 이 없다 — sub-issue 로 묶거나 \`## Parent\` 절을 달라. \`state:ready\` 를 뗐다. 부모를 단 뒤 다시 붙인다." > /dev/null \
+부모 spec 이 없다 — sub-issue 로 묶거나 \`## Parent\` 절을 달라. \`${L_READY}\` 를 뗐다. 부모를 단 뒤 다시 붙인다." > /dev/null \
   || echo "::warning::parent-check: could not comment on #$n"
 output ok=false

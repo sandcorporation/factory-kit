@@ -76,7 +76,7 @@ EOF
 
 setup "record: a ticket's run becomes one ledger line under its spec"
 with_ledger
-issue 249 spec "spec body"
+issue 249 kind:spec "spec body"
 issue 300 "" "## Parent
 
 #249
@@ -99,7 +99,7 @@ eq "still one ledger comment" 1 "$(comment_count 900 '<!-- ledger -->')"
 
 setup "record: a spec's own run is under the spec"
 with_ledger
-issue 249 spec "no parent here"
+issue 249 kind:spec "no parent here"
 execution_file
 bash "$ledger" record decompose 249 > /dev/null
 line=$(jq -r '.[-1].body' "$FAKE_GH/comments-900.json" | tr -d '\r' | sed -n 2p)
@@ -107,7 +107,7 @@ eq "spec of a spec" "spec=#249 node=decompose issue=#249" "${line%% run=*}"
 
 setup "record: extra pairs go at the end of the line"
 with_ledger
-issue 249 spec "no parent here"
+issue 249 kind:spec "no parent here"
 execution_file
 bash "$ledger" record decompose 249 tickets=4 > /dev/null 2>&1
 line=$(jq -r '.[-1].body' "$FAKE_GH/comments-900.json" | tr -d '\r' | sed -n 2p)
@@ -163,7 +163,7 @@ eq "none: the issue itself" 9 "$(bash "$ledger" spec-of 9)"
 eq "parent-of none: empty" "" "$(bash "$ledger" parent-of 9)"
 
 setup "spec-of: a spec label issue is its own spec even with a parent"
-issue 174 spec "## Parent
+issue 174 kind:spec "## Parent
 
 #45"
 echo '{"number": 45}' > "$FAKE_GH/parent-174.json"
@@ -215,7 +215,7 @@ eq "day" 0.0000 "$(bash "$ledger" day-total)"
 
 setup "guard: a fresh spec may start"
 with_ledger
-issue 249 spec "spec"
+issue 249 kind:spec "spec"
 issue 300 state:ready "## Parent
 #249"
 bash "$ledger" guard 300 > /dev/null
@@ -235,7 +235,7 @@ done
 
 setup "guard: spec budget defaults to 60"
 with_ledger
-issue 249 spec "spec"
+issue 249 kind:spec "spec"
 ledger_comment 2026-11-10T00:00:00Z 249 59.99
 bash "$ledger" guard 249 > /dev/null
 eq "under 60" true "$(out go)"
@@ -247,7 +247,7 @@ eq "labelled" "kind:spec,wait:budget" "$(labels_of 249)"
 
 setup "guard: FACTORY_SPEC_BUDGET_USD beats the default"
 with_ledger
-issue 249 spec "spec"
+issue 249 kind:spec "spec"
 ledger_comment 2026-11-10T00:00:00Z 249 70
 FACTORY_SPEC_BUDGET_USD=100 bash "$ledger" guard 249 > /dev/null
 eq "70 of 100" true "$(out go)"
@@ -256,7 +256,7 @@ eq "70 of 50" false "$(out go)"
 
 setup "guard: the body's 예산 line beats the variable"
 with_ledger
-issue 249 spec "## Problem
+issue 249 kind:spec "## Problem
 
 예산: \$80
 
@@ -264,16 +264,16 @@ text"
 ledger_comment 2026-11-10T00:00:00Z 249 70
 FACTORY_SPEC_BUDGET_USD=50 bash "$ledger" guard 249 > /dev/null
 eq "70 of body 80 (variable 50)" true "$(out go)"
-issue 249 spec "예산: \$5.5"
+issue 249 kind:spec "예산: \$5.5"
 FACTORY_SPEC_BUDGET_USD=100 bash "$ledger" guard 249 > /dev/null
 eq "70 of body 5.5 (variable 100)" false "$(out go)"
-issue 249 spec "예산: 90"
+issue 249 kind:spec "예산: 90"
 bash "$ledger" guard 249 > /dev/null
 eq "without the dollar sign" true "$(out go)"
 
 setup "guard: a ticket counts against its parent spec"
 with_ledger
-issue 249 spec "spec"
+issue 249 kind:spec "spec"
 issue 300 "" "## Parent
 
 #249"
@@ -285,22 +285,22 @@ eq "ticket untouched" "" "$(labels_of 300)"
 
 setup "guard: the spec marker is left once"
 with_ledger
-issue 249 spec "spec"
+issue 249 kind:spec "spec"
 ledger_comment 2026-11-10T00:00:00Z 249 61
 bash "$ledger" guard 249 > /dev/null
-issue 249 spec "spec"   # someone took wait:budget off without raising the budget
+issue 249 kind:spec "spec"   # someone took wait:budget off without raising the budget
 bash "$ledger" guard 249 > /dev/null
 eq "one marker" 1 "$(comment_count 249 '<!-- factory-budget-spec -->')"
 eq "go" false "$(out go)"
-issue 249 spec "예산: \$70"   # raised, spent again
+issue 249 kind:spec "예산: \$70"   # raised, spent again
 ledger_comment 2026-11-10T00:00:00Z 249 10
 bash "$ledger" guard 249 > /dev/null
 eq "a new budget gets a new marker" 2 "$(comment_count 249 '<!-- factory-budget-spec -->')"
 
 setup "guard: daily budget defaults to 150 per KST day"
 with_ledger
-issue 1 spec "예산: \$1000"
-issue 2 spec "예산: \$1000"
+issue 1 kind:spec "예산: \$1000"
+issue 2 kind:spec "예산: \$1000"
 ledger_comment 2026-11-16T15:00:00Z 1 100   # 11-17 KST
 ledger_comment 2026-11-16T14:59:00Z 2 100   # 11-16 KST: does not count today
 ledger_comment 2026-11-17T02:00:00Z 2 49.99 # 11-17 KST
@@ -319,7 +319,7 @@ eq "next KST day" true "$(out go)"
 
 setup "guard: FACTORY_DAILY_BUDGET_USD"
 with_ledger
-issue 1 spec "spec"
+issue 1 kind:spec "spec"
 ledger_comment 2026-11-17T02:00:00Z 1 10
 FACTORY_DAILY_BUDGET_USD=10 bash "$ledger" guard 1 > /dev/null
 eq "10 of 10" false "$(out go)"
@@ -328,7 +328,7 @@ eq "10 of 20" true "$(out go)"
 
 setup "guard: a daily budget of 0 is a stop on purpose, not a wait for midnight (#502)"
 with_ledger
-issue 1 spec "spec"
+issue 1 kind:spec "spec"
 FACTORY_DAILY_BUDGET_USD=0 bash "$ledger" guard 1 > /dev/null
 eq "0 of 0" false "$(out go)"
 daily0=$(jq -r '.[] | select(.body | startswith("<!-- factory-budget-daily ")) | .body' "$FAKE_GH/comments-900.json" | tr -d '\r')
@@ -336,7 +336,7 @@ case "$daily0" in *"0시"*) bad "no midnight in [$daily0]" ;; *) ok ;; esac
 case "$daily0" in *"일부러 멈춘 상태"*) ok ;; *) bad "stop on purpose not in [$daily0]" ;; esac
 
 setup "guard: no ledger issue means nothing spent"
-issue 1 spec "spec"
+issue 1 kind:spec "spec"
 FACTORY_DAILY_BUDGET_USD=1 FACTORY_SPEC_BUDGET_USD=1 bash "$ledger" guard 1 > /dev/null
 eq "go without a ledger" true "$(out go)"
 
@@ -358,7 +358,7 @@ setup "event: impl-start waits since the last state:ready label"
 with_ledger; issue 7 state:ready ""
 jq -n '[{event: "labeled", created_at: "2026-11-17T01:00:00Z", label: {name: "state:ready"}},
         {event: "labeled", created_at: "2026-11-17T02:50:00Z", label: {name: "state:ready"}},
-        {event: "labeled", created_at: "2026-11-17T02:55:00Z", label: {name: "model:sonnet"}}]' \
+        {event: "labeled", created_at: "2026-11-17T02:55:00Z", label: {name: "model:strong"}}]' \
   | tr -d '\r' > "$FAKE_GH/events-7.json"
 bash "$ledger" event impl-start 7 track=2 > /dev/null
 eq "exit" 0 "$?"

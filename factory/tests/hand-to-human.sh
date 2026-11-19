@@ -30,7 +30,7 @@ setup "takes state:running and state:ready off, adds state:human and leaves the 
   "spec-ticket,state:running,state:ready"
 run 7 conflict "까닭 한 줄"
 eq code 0 "$(code)"
-eq labels "state:human,spec-ticket" "$(labels)"
+eq labels "spec-ticket,state:human" "$(labels)"
 eq comment "<!-- factory-human conflict -->
 까닭 한 줄" "$(comments)"
 
@@ -82,16 +82,16 @@ event=handover issue=#7 code=push-rejected run=55" "$(jq -r '[.[].body] | join("
 setup "a deferred issue is left as it is: no label, no comment, only a warning (#437, #473)" "kind:local,state:deferred"
 run 7 local-only "까닭"
 eq code 0 "$(code)"
-eq labels "state:deferred,kind:local" "$(labels)"
+eq labels "kind:local,state:deferred" "$(labels)"
 eq "no comment" 0 "$(jq length "$FAKE_GH/comments-7.json" | tr -d '\r')"
 case "$(cat "$root/log")" in *'::warning::'*deferred*) ok ;; *) bad "warns about deferred: $(cat "$root/log")" ;; esac
 
-setup "an issue already handed over with the same code whose state:human a person took off is not handed over again" "local"
+setup "an issue already handed over with the same code whose state:human a person took off is not handed over again" "kind:local"
 jq -n '[{id: 1, created_at: "2026-11-17T00:00:00Z", body: "<!-- factory-human local-only -->\n<!-- factory-local -->\n까닭", user: {login: "github-actions[bot]"}}]' \
   | tr -d '\r' > "$FAKE_GH/comments-7.json"
 run 7 local-only "까닭"
 eq code 0 "$(code)"
-eq labels local "$(labels)"
+eq labels kind:local "$(labels)"
 eq "still one comment" 1 "$(jq length "$FAKE_GH/comments-7.json" | tr -d '\r')"
 case "$(cat "$root/log")" in *'::warning::'*'already handed over'*) ok ;; *) bad "warns about the earlier hand-over: $(cat "$root/log")" ;; esac
 
@@ -108,14 +108,14 @@ run 7 other "까닭"
 eq code 0 "$(code)"
 
 # Only hand-to-human.sh puts state:human on: a hand-over without its marker comment reaches nobody.
-current="no other factory file or workflow adds state:human"
+current="no other factory file or workflow adds (state:human|L_HUMAN)"
 github=$(cd "$here/../.." && pwd)
 adders=$(grep -rnE 'state:human' "$github/factory" "$github/workflows" \
   | grep -v "^$github/factory/tests/" \
   | grep -v "^$github/factory/hand-to-human.sh:" \
   | grep -E -- "--add-label[= ]+[\"']?state:human|labels\[\]=[\"']?state:human|add_label[^|;]*state:human|addLabels?[^|;]*state:human" || true)
 eq "adders" "" "$adders"
-case "$(cat "$github/factory/hand-to-human.sh")" in *'LABEL=state:human'*) ok ;; *) bad "hand-to-human.sh no longer names the label" ;; esac
+case "$(cat "$github/factory/hand-to-human.sh")" in *'LABEL="${L_HUMAN}"'*) ok ;; *) bad "hand-to-human.sh no longer names the label" ;; esac
 
 setup "the reason comment goes on before the label, so whoever sees the label finds the reason (#492)" "state:running"
 run 7 agent-blocked "까닭"

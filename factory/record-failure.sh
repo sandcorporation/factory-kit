@@ -20,6 +20,7 @@
 set -u
 : "${REPO:?REPO is not set}"
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib/labels.sh"
 usage() { echo 'usage: record-failure.sh <ticket> <code|infra> <run url> [<run started at>]' >&2; exit 2; }
 [ $# -eq 3 ] || [ $# -eq 4 ] || usage
 n=$1 kind=$2 url=$3 started=${4:-}
@@ -75,9 +76,9 @@ if [ "${fails:-0}" -ge "$limit" ]; then
   # The code of the hand-over (#437): the last failure ended on a conflict merge-check.sh found unresolved
   # (the factory's own merge in Finish merge / Require main merged ran first, #434) → conflict.
   case "${FAILURE_REASON:-}" in 충돌을\ 풀지\ 않고\ 끝남*) code=conflict ;; *) code=attempts-exhausted ;; esac
-  bash "$here/hand-to-human.sh" "$n" "$code" "Implementer가 ${fails}번 실패했다($what, 한도 ${limit}번, 마지막 run: $url). 공장은 이 티켓을 더 돌리지 않는다: 사람이 실패 까닭을 보고 고친 뒤 \`state:human\`을 떼고 \`state:ready\`를 붙이며 \`<!-- factory-reset -->\` 댓글을 남긴다."
+  bash "$here/hand-to-human.sh" "$n" "$code" "Implementer가 ${fails}번 실패했다($what, 한도 ${limit}번, 마지막 run: $url). 공장은 이 티켓을 더 돌리지 않는다: 사람이 실패 까닭을 보고 고친 뒤 \`${L_HUMAN}\`을 떼고 \`${L_READY}\`를 붙이며 \`<!-- factory-reset -->\` 댓글을 남긴다."
   exit $?
 fi
-gh api "repos/$REPO/issues/$n/labels" -f "labels[]=state:ready" > /dev/null \
-  || { echo "::warning::record-failure: could not put state:ready back on #$n"; exit 1; }
+gh api "repos/$REPO/issues/$n/labels" -f "labels[]=${L_READY}" > /dev/null \
+  || { echo "::warning::record-failure: could not put ${L_READY} back on #$n"; exit 1; }
 echo "#$n: $what failure $fails of $limit, back in the queue"

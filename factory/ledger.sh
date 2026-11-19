@@ -54,6 +54,7 @@
 # Recorded execution files move to $RUNNER_TEMP/factory-runs/, so a later `record` after a skipped stage
 # does not count the same run twice. Needs bash, gh and jq (both GitHub runners have them).
 set -u
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/labels.sh"
 
 REPO=${REPO:-${GITHUB_REPOSITORY:-}}
 SPEC_BUDGET_DEFAULT=60
@@ -72,7 +73,7 @@ kst_date() { j -rn --argjson t "$1" --argjson o "$KST" '($t + $o) | strftime("%Y
 
 # Number of the open ledger issue, empty when there is none.
 ledger_issue() {
-  gh api "repos/$REPO/issues?labels=kind:ledger&state=open&per_page=100" \
+  gh api "repos/$REPO/issues?labels=${L_LEDGER}&state=open&per_page=100" \
     | j -r '[.[] | select(.pull_request | not)] | sort_by(.number) | .[0].number // empty'
 }
 
@@ -81,8 +82,8 @@ ledger_issue() {
 ensure_ledger() {
   local n; n=$(ledger_issue)
   if [ -z "$n" ]; then
-    warn "no open kind:ledger issue; creating one" >&2
-    n=$(gh api "repos/$REPO/issues" -f title="공장 비용 장부" -f 'labels[]=kind:ledger'       -f body="소프트웨어 공장의 비용 장부. 이 이슈를 닫지 않는다 (docs/adr/0001-software-factory.md)."       2>/dev/null | j -r '.number // empty' 2>/dev/null)
+    warn "no open ${L_LEDGER} issue; creating one" >&2
+    n=$(gh api "repos/$REPO/issues" -f title="공장 비용 장부" -f 'labels[]='"${L_LEDGER}"''       -f body="소프트웨어 공장의 비용 장부. 이 이슈를 닫지 않는다 (docs/adr/0001-software-factory.md)."       2>/dev/null | j -r '.number // empty' 2>/dev/null)
   fi
   echo "$n"
 }
@@ -143,7 +144,7 @@ parent_of() {
 spec_of() {
   local json p
   json=$(issue_json "$1" 2>/dev/null) || json=
-  if [ -n "$json" ] && printf '%s' "$json" | jq -e 'any(.labels[]?; .name == "kind:spec")' >/dev/null 2>&1; then
+  if [ -n "$json" ] && printf '%s' "$json" | jq -e 'any(.labels[]?; .name == "'"${L_SPEC}"'")' >/dev/null 2>&1; then
     echo "$1"; return
   fi
   p=$(sub_issue_parent "$1")
@@ -197,7 +198,7 @@ record() {
   local spec; spec=$(spec_of "$issue")
   local line="spec=#${spec:-$issue} node=$node issue=#$issue run=${GITHUB_RUN_ID:-local} $usage$extra"
   local n; n=$(ensure_ledger)
-  if [ -z "$n" ]; then warn "could not find or create the kind:ledger issue; not recorded: $line"; return 0; fi
+  if [ -z "$n" ]; then warn "could not find or create the ${L_LEDGER} issue; not recorded: $line"; return 0; fi
   if post_comment "$n" "<!-- ledger -->
 $line"; then
     echo "ledger #$n: $line"
@@ -217,7 +218,7 @@ guard() {
   fi
   labels=",$(printf '%s' "$json" | j -r '[.labels[].name] | join(",")'),"
   body=$(printf '%s' "$json" | j -r '.body // ""')
-  for l in wait:decision wait:budget; do
+  for l in "${L_DECISION}" "${L_BUDGET}"; do
     case "$labels" in *",$l,"*)
       echo "::notice::guard: spec #$spec is labelled $l; #$issue does not start"
       output go=false "reason=$l"
@@ -249,11 +250,11 @@ guard() {
   total=$(spec_total "$spec")
   if reached "$total" "$budget"; then
     echo "::warning::guard: spec #$spec spent \$$total of its \$$budget budget; pausing it"
-    add_label "$spec" wait:budget || echo "::warning::guard: could not label #$spec wait:budget"
+    add_label "$spec" "${L_BUDGET}" || echo "::warning::guard: could not label #$spec ${L_BUDGET}"
     if ! has_marker "$spec" "<!-- factory-budget-spec -->" "budget=$budget"; then
       post_comment "$spec" "<!-- factory-budget-spec -->
 budget=$budget
-이 spec이 예산에 닿아 멈췄다: 합계 \$$total / 예산 \$$budget. 이어 가려면 본문의 \`예산: \$N\` 줄을 올리고 \`wait:budget\` 라벨을 뗀다." \
+이 spec이 예산에 닿아 멈췄다: 합계 \$$total / 예산 \$$budget. 이어 가려면 본문의 \`예산: \$N\` 줄을 올리고 \`${L_BUDGET}\` 라벨을 뗀다." \
         || echo "::warning::guard: could not mark #$spec"
     fi
     output go=false reason=spec-budget
@@ -272,13 +273,13 @@ event() {
   local kind=$1 issue=$2; shift 2
   command -v jq >/dev/null 2>&1 || { warn "jq is missing; event $kind #$issue not recorded"; return 0; }
   local n; n=$(ledger_issue 2>/dev/null)
-  [ -n "$n" ] || { warn "no open kind:ledger issue; event $kind #$issue not recorded"; return 0; }
+  [ -n "$n" ] || { warn "no open ${L_LEDGER} issue; event $kind #$issue not recorded"; return 0; }
   local since=
   case "$kind" in
     impl-start)
       # the last time the ticket was labelled `state:ready`
       since=$(gh api "repos/$REPO/issues/$issue/events?per_page=100" --paginate 2>/dev/null \
-        | j -rs 'add // [] | [.[] | select(.event == "labeled" and .label.name == "state:ready")]
+        | j -rs 'add // [] | [.[] | select(.event == "labeled" and .label.name == "'"${L_READY}"'")]
           | last | .created_at // empty' 2>/dev/null) ;;
     verify-start)
       # the last hand-over of the ticket to Verify
@@ -309,7 +310,7 @@ $line"; then
 #   the hand-overs to a person (event=handover code=…, left by hand-to-human.sh) per code, most first (#437)
 stats() {
   local n; n=$(ledger_issue)
-  [ -n "$n" ] || { echo "no open kind:ledger issue" >&2; return 1; }
+  [ -n "$n" ] || { echo "no open ${L_LEDGER} issue" >&2; return 1; }
   comments "$n" | j -rs '
     [.[] | select(.body | startswith("<!-- factory-event -->")) | .body | split("\n")[1] // ""
       | [scan("([a-z_]+)=([^ ]+)") | {key: .[0], value: .[1]}] | from_entries] as $e

@@ -52,6 +52,7 @@
 # GITHUB_RUN_ID, and the budget variables of ledger.sh.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib/labels.sh"
 : "${REPO:?REPO is not set}"
 usage() { echo 'usage: dispatch-next.sh [--tickets-only] [--candidates "N M …"] [--first N]' >&2; exit 2; }
 tickets_only=false
@@ -94,12 +95,12 @@ go() {
 # bridge.sh mails it. Never fails: a missing ledger or a failed call only warns.
 notify() {
   local marker=$1 text=$2 ledger firsts
-  ledger=$(gh api "repos/$REPO/issues?labels=kind:ledger&state=open&per_page=100" \
+  ledger=$(gh api "repos/$REPO/issues?labels=${L_LEDGER}&state=open&per_page=100" \
     --jq '[.[] | select(.pull_request | not)] | sort_by(.number) | .[0].number // empty') \
     || { echo "::warning::dispatch-next: could not find the ledger issue for $marker"; return 0; }
   ledger=$(printf '%s' "$ledger" | tr -d '\r')
   if [ -z "$ledger" ]; then
-    echo "::warning::dispatch-next: no open kind:ledger issue; $marker not left"
+    echo "::warning::dispatch-next: no open ${L_LEDGER} issue; $marker not left"
     return 0
   fi
   firsts=$(gh api "repos/$REPO/issues/$ledger/comments?per_page=100" --paginate \
@@ -166,13 +167,13 @@ dispatch() {
 
 # listed: open `state:ready` issues by the label search, ascending.
 listed() {
-  gh issue list --repo "$REPO" --state open --label state:ready --limit 200 --json number \
+  gh issue list --repo "$REPO" --state open --label "${L_READY}" --limit 200 --json number \
     --jq 'sort_by(.number) | .[].number'
 }
 found=$(listed)
 if [ -z "$found" ] && [ -z "$candidates" ] && [ -z "$first" ]; then
   wait=${FACTORY_LIST_RETRY_WAIT:-10}
-  echo "::notice::the state:ready search is empty; asking again in ${wait}s (the search index may lag)"
+  echo "::notice::the ${L_READY} search is empty; asking again in ${wait}s (the search index may lag)"
   sleep "$wait"
   found=$(listed)
 fi
@@ -182,10 +183,10 @@ for n in $first $(printf '%s\n' $found $candidates | sort -n -u | grep -vx "${fi
   [ $# -gt 0 ] || break
   case "$busy_tickets" in *" $n "*) echo "::notice::#$n already has an implement run"; continue ;; esac
   read -r state ready open isspec islocal subs < <(gh api "repos/$REPO/issues/$n" --jq '[.state,
-    (any(.labels[]; .name == "state:ready") | tostring),
+    (any(.labels[]; .name == "'"${L_READY}"'") | tostring),
     (.issue_dependencies_summary.blocked_by // 0 | tostring),
-    (any(.labels[]; .name == "kind:spec") | tostring),
-    (any(.labels[]; .name == "kind:local") | tostring),
+    (any(.labels[]; .name == "'"${L_SPEC}"'") | tostring),
+    (any(.labels[]; .name == "'"${L_LOCAL}"'") | tostring),
     (.sub_issues_summary.total // 0 | tostring)] | @tsv' | tr -d '\r')
   [ "${state:-}" = open ] && [ "${ready:-}" = true ] || continue
   # A spec (label `spec`) or an issue with sub-issues is a parent, not a ticket.
@@ -225,35 +226,35 @@ for t in $blocked; do
   while IFS=$'\t' read -r b kind; do
     [ -n "$b" ] || continue
     if [ "$kind" = deferred ]; then
-      notify "<!-- factory-stalled deferred-$b-$t -->" "공장 막힘(미룸): 미룬 #$b(state:deferred)이 #$t을 막는다. #$t은 #$b이 닫히거나 막음이 풀릴 때까지 시작하지 않는다.
+      notify "<!-- factory-stalled deferred-$b-$t -->" "공장 막힘(미룸): 미룬 #$b(${L_DEFERRED})이 #$t을 막는다. #$t은 #$b이 닫히거나 막음이 풀릴 때까지 시작하지 않는다.
 #$t도 미룰 것이면 \`deferred\`를 붙이고, 아니면 #$b의 막음을 푼다."
     else
-      stalled="$stalled- #$b(state:human)이 #$t을 막는다
+      stalled="$stalled- #$b(${L_HUMAN})이 #$t을 막는다
 "
     fi
   done < <(gh api "repos/$REPO/issues/$t/dependencies/blocked_by" \
     --jq '.[] | select(.state == "open")
-      | (if any(.labels[]; .name == "state:deferred") then "deferred"
-         elif any(.labels[]; .name == "state:human") then "human" else empty end) as $k
+      | (if any(.labels[]; .name == "'"${L_DEFERRED}"'") then "deferred"
+         elif any(.labels[]; .name == "'"${L_HUMAN}"'") then "human" else empty end) as $k
       | "\(.number)\t\($k)"' 2> /dev/null | tr -d '\r')
 done
 if [ -n "$stalled" ]; then
   day=$(date -u -d "@$(( ${FACTORY_NOW:-$(date -u +%s)} + 32400 ))" +%F)
   notify "<!-- factory-stalled $day -->" "공장 막힘: 기다리는 티켓이 사람 몫 이슈에 막혀 있다.
-${stalled}사람 몫 이슈를 풀고 \`state:human\`을 뗀다."
+${stalled}사람 몫 이슈를 풀고 \`${L_HUMAN}\`을 뗀다."
 fi
 
 # Specs and tickets for the idle check and the spec queue below.
-specs=$(gh issue list --repo "$REPO" --state open --label kind:spec --json number --jq '.[].number' | tr -d '\r')
+specs=$(gh issue list --repo "$REPO" --state open --label "${L_SPEC}" --json number --jq '.[].number' | tr -d '\r')
 # The label search may lag (a ticket closed a moment ago still shows up), so each number is read
 # again and counted only when it is open with the label (#410).
-listed_active=$( { gh issue list --repo "$REPO" --state open --label state:running --json number --jq '.[].number'
-  gh issue list --repo "$REPO" --state open --label state:ready --json number --jq '.[].number'; } \
+listed_active=$( { gh issue list --repo "$REPO" --state open --label "${L_RUNNING}" --json number --jq '.[].number'
+  gh issue list --repo "$REPO" --state open --label "${L_READY}" --json number --jq '.[].number'; } \
   | tr -d '\r' | sort -n -u)
 active=
 for n in $listed_active; do
   ok=$(gh api "repos/$REPO/issues/$n" \
-    --jq '.state == "open" and any(.labels[]; .name == "state:running" or .name == "state:ready")' \
+    --jq '.state == "open" and any(.labels[]; .name == "'"${L_RUNNING}"'" or .name == "'"${L_READY}"'")' \
     | tr -d '\r') || ok=false
   [ "$ok" = true ] && active="$active $n"
 done
@@ -262,7 +263,7 @@ pending=
 for s in ${FACTORY_SPEC_QUEUE:-}; do
   read -r state labels < <(gh issue view "$s" --repo "$REPO" --json state,labels --jq '[.state, ([.labels[].name] | join(","))] | @tsv')
   [ "$state" = OPEN ] || continue
-  case ",$labels," in *,kind:spec,*) continue;; esac
+  case ",$labels," in *,"${L_SPEC}",*) continue;; esac
   pending="$pending $s"
 done
 idle() {
@@ -305,7 +306,7 @@ for s in $specs; do
   # "<number> open|closed|deferred" per sub-issue (`state:deferred`: open, put off by a person, #437).
   subs_state=$(gh api "repos/$REPO/issues/$s/sub_issues?per_page=100" --paginate --jq '.[]
     | "\(.number) \(if .state == "closed" then "closed"
-      elif any(.labels[]?; .name == "state:deferred") then "deferred" else "open" end)"' | tr -d '\r')
+      elif any(.labels[]?; .name == "'"${L_DEFERRED}"'") then "deferred" else "open" end)"' | tr -d '\r')
   # A spec whose only open tickets are deferred is finished: close it, naming what was left open.
   if [ -n "$subs_state" ] && ! printf '%s\n' "$subs_state" | grep -q ' open$'; then
     left=$(printf '%s\n' "$subs_state" | awk '$2 == "deferred" { printf "%s#%s", (n++ ? " " : ""), $1 }')
@@ -334,7 +335,7 @@ if [ $# -gt 0 ]; then
     exit 0
   fi
   echo "next spec: #$s"
-  gh issue edit "$s" --repo "$REPO" --add-label kind:spec
+  gh issue edit "$s" --repo "$REPO" --add-label "${L_SPEC}"
   gh workflow run factory-decompose.yml --repo "$REPO" -f issue="$s"
   if [ $# -eq 1 ]; then
     notify "<!-- factory-queue-empty $s -->" "spec 큐 바닥남: #$s가 FACTORY_SPEC_QUEUE에 남은 마지막 spec이다. 공장은 #$s를 돌리는 중이고, 이것이 끝나면 할 일이 없다. 다음 spec을 FACTORY_SPEC_QUEUE에 넣는다."

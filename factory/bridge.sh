@@ -109,6 +109,7 @@
 # Exits 1 when a read or a send failed (the rest is still sent), 2 on a usage or setup error.
 # Needs bash, gh, jq and switchboard.
 set -u
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/labels.sh"
 # origin_repo <dir>: owner/name of the GitHub `origin` remote of the git checkout at <dir>, or nothing.
 origin_repo() {
   local u
@@ -128,7 +129,7 @@ if [ -z "$REPO" ]; then
 fi
 NAME=${REPO##*/}
 if [ -n "${BRIDGE_TO:-}" ]; then
-  echo "bridge: BRIDGE_TO is ignored; use BRIDGE_TO_BOSS (wait:decision) and BRIDGE_TO_COORD (the rest)" >&2
+  echo "bridge: BRIDGE_TO is ignored; use BRIDGE_TO_BOSS (${L_DECISION}) and BRIDGE_TO_COORD (the rest)" >&2
 fi
 TO_BOSS=${BRIDGE_TO_BOSS:-}
 TO_COORD=${BRIDGE_TO_COORD:-}
@@ -273,25 +274,25 @@ handover_code() {
   echo other
 }
 
-for label in wait:decision state:human wait:budget wait:check; do
+for label in "${L_DECISION}" "${L_HUMAN}" "${L_BUDGET}" "${L_CHECK}"; do
   list=$(gh api "repos/$REPO/issues?state=open&labels=$label&per_page=100" --paginate) \
     || { echo "bridge: could not list the issues labelled $label" >&2; failed=1; continue; }
   numbers=$(printf '%s' "$list" | j -s -r --arg l "$label" 'add // [] | .[]
     | select(.state == "open" and any(.labels[]; .name == $l))
-    | select($l != "wait:check" or ((.body // "") | test("(^|\n)[ \t]*[-*+] \\[ \\]")))
-    | select($l != "state:human" or (any(.labels[]; .name == "state:deferred") | not))
+    | select($l != "'"${L_CHECK}"'" or ((.body // "") | test("(^|\n)[ \t]*[-*+] \\[ \\]")))
+    | select($l != "'"${L_HUMAN}"'" or (any(.labels[]; .name == "'"${L_DEFERRED}"'") | not))
     | .number')
   case $label in
-    wait:decision)
+    "${L_DECISION}")
       kind="질문"; recipients=$TO_BOSS
-      todo="이슈에 답 댓글을 달고 wait:decision 라벨을 떼면 공장이 이어 간다." ;;
-    state:human)
+      todo="이슈에 답 댓글을 달고 ${L_DECISION} 라벨을 떼면 공장이 이어 간다." ;;
+    "${L_HUMAN}")
       kind="사람 넘김"; recipients=$coord_and_cc
-      todo="공장이 이 이슈를 사람에게 넘겼다. 까닭을 보고 이어 받는다(다시 공장에 넣으려면 state:human을 떼고 state:ready를 붙인다)." ;;
-    wait:budget)
+      todo="공장이 이 이슈를 사람에게 넘겼다. 까닭을 보고 이어 받는다(다시 공장에 넣으려면 ${L_HUMAN}을 떼고 ${L_READY}를 붙인다)." ;;
+    "${L_BUDGET}")
       kind="spec 상한 멈춤"; recipients=$coord_and_cc
-      todo="spec 본문의 \`예산: \$N\` 줄을 올리고 wait:budget 라벨을 떼면 이어 간다." ;;
-    wait:check)
+      todo="spec 본문의 \`예산: \$N\` 줄을 올리고 ${L_BUDGET} 라벨을 떼면 이어 간다." ;;
+    "${L_CHECK}")
       kind="사람 확인"; recipients=$human_check_to
       todo=$human_check_todo ;;
   esac
@@ -305,7 +306,7 @@ for label in wait:decision state:human wait:budget wait:check; do
     # when the last `labeled` event was by github-actions[bot] or a BRIDGE_TRUSTED_BOTS login. A person
     # (a coordinator pausing a spec or taking a ticket by hand) put it on on purpose: one status line, no
     # mail. Without a labeled event (who put it on is unknown) it is mailed as before.
-    case $label in state:human | wait:budget)
+    case $label in "${L_HUMAN}" | "${L_BUDGET}")
       by=$(printf '%s' "$tl" | j -s -r --arg l "$label" 'add // [] | map(select(.event == "labeled"
         and (.label.name // "") == $l)) | sort_by(.created_at) | last | .actor.login // ""')
       if [ "$at" != unknown ] && ! trusted_bot "$by"; then
@@ -328,7 +329,7 @@ for label in wait:decision state:human wait:budget wait:check; do
     url=$(printf '%s' "$issue" | j -r '.html_url')
     why=$(reason "$n")
     key="$NAME-factory-label-$n-$label-$(slug "$at")"
-    if [ "$label" = wait:decision ] || { [ "$label" = wait:check ] && [ "$HUMAN_CHECK_TO" = boss ]; }; then
+    if [ "$label" = "${L_DECISION}" ] || { [ "$label" = "${L_CHECK}" ] && [ "$HUMAN_CHECK_TO" = boss ]; }; then
       text="종류: $kind ($label)
 이슈: $url
 제목: #$n $title
@@ -345,13 +346,13 @@ $why
     # gets one line only. A hand-over names its code (the latest trusted marker's; the old marker
     # without a code is `other`) in the subject and the first line.
     what=$kind fix=$todo
-    [ "$label" = state:human ] && what="$kind($(handover_code "$n"))"
+    [ "$label" = "${L_HUMAN}" ] && what="$kind($(handover_code "$n"))"
     # state:human + kind:local: the factory left the ticket outside itself on purpose (workflow and .claude
     # files); a local worker implements it.
-    if [ "$label" = state:human ] && [ "$(printf '%s' "$list" | j -s --argjson n "$n" 'add // []
-        | map(select(.number == $n)) | .[0] | any(.labels[]?; .name == "kind:local")')" = true ]; then
+    if [ "$label" = "${L_HUMAN}" ] && [ "$(printf '%s' "$list" | j -s --argjson n "$n" 'add // []
+        | map(select(.number == $n)) | .[0] | any(.labels[]?; .name == "'"${L_LOCAL}"'")')" = true ]; then
       what="로컬 작업자 몫"
-      fix="공장이 이 티켓을 공장 밖에 두었다(state:human + kind:local, workflow·.claude 파일). 로컬 작업자가 구현한다."
+      fix="공장이 이 티켓을 공장 밖에 두었다(${L_HUMAN} + ${L_LOCAL}, workflow·.claude 파일). 로컬 작업자가 구현한다."
     fi
     text="종류: $what ($label)
 이슈: $url
@@ -387,7 +388,7 @@ matches=$(printf '%s' "$comments" | j -s -r '
      elif ($b | contains("<!-- factory-idle ")) then "idle"
      elif ($b | contains("<!-- factory-stalled ")) then "stalled"
      elif ($b | contains("<!-- factory-bench-regression ")) then "bench-regression"
-     elif ($b | contains("<!-- factory-human-check ")) then "wait:check"
+     elif ($b | contains("<!-- factory-human-check ")) then "'"${L_CHECK}"'"
      else empty end) as $k
   | ($b | capture("<!-- factory-" + $k + " (?<v>[^ ]*) -->").v // "") as $v
   | [(.id | tostring), $k, (.issue_url | sub(".*/"; "")), (.user.login // ""), $v] | @tsv')
@@ -399,7 +400,7 @@ while IFS=$'\t' read -r id kind n author value; do
   [ -n "$id" ] || continue
   sent "$id ignored" && continue
   rcpts=$coord_and_cc
-  [ "$kind" = wait:check ] && rcpts=$human_check_to
+  [ "$kind" = "${L_CHECK}" ] && rcpts=$human_check_to
   # An idle marker shares its key with the direct idle check (part 3).
   if [ "$kind" = idle ]; then
     pending=
@@ -455,7 +456,7 @@ while IFS=$'\t' read -r id kind n author value; do
       todo="FACTORY_SPEC_QUEUE에 spec을 넣고 dispatch-next를 다시 돌린다(조율자 몫)." ;;
     stalled)
       label="공장 막힘"
-      todo="위 사람 몫 이슈를 풀고 state:human을 뗀다."
+      todo="위 사람 몫 이슈를 풀고 ${L_HUMAN}을 뗀다."
       # Once per pair (dispatch-next.sh): a deferred issue blocks a waiting ticket (#437).
       case "$value" in deferred-*)
         label="공장 막힘(미룸)"
@@ -464,7 +465,7 @@ while IFS=$'\t' read -r id kind n author value; do
     bench-regression)
       label="벤치 한도 초과"
       todo="위 커밋 구간에서 한도를 넘긴 커밋을 찾아 고칠 티켓을 낸다(조율자 몫)." ;;
-    wait:check)
+    "${L_CHECK}")
       label="사람 확인"
       todo=$human_check_todo ;;
   esac
@@ -504,7 +505,7 @@ if [ -n "$queue" ]; then
     [ "$st" = closed ] || { idle=false; break; }
   done
   if $idle; then
-    for l in state:ready state:running; do
+    for l in "${L_READY}" "${L_RUNNING}"; do
       c=$(gh api "repos/$REPO/issues?state=open&labels=$l&per_page=100" --paginate \
         | j -s --arg l "$l" 'add // [] | map(select(.state == "open" and any(.labels[]; .name == $l))) | length') \
         || { idle=false; failed=1; break; }
@@ -515,7 +516,7 @@ if [ -n "$queue" ]; then
     text="종류: 공장 idle
 큐: FACTORY_SPEC_QUEUE=${FACTORY_SPEC_QUEUE}
 
-큐의 spec이 모두 닫혔고 state:ready·state:running 열린 이슈가 없다.
+큐의 spec이 모두 닫혔고 ${L_READY}·${L_RUNNING} 열린 이슈가 없다.
 
 할 일: FACTORY_SPEC_QUEUE에 spec을 넣고 dispatch-next를 다시 돌린다(조율자 몫)."
     deliver "idle $queue" "$NAME-factory-idle-$(slug "$queue")" "$coord_and_cc" \

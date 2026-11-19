@@ -30,6 +30,18 @@ d=${FAKE_GH:?FAKE_GH is not set}
 printf '%s\n' "$*" >> "$d/calls.log"
 fail() { echo "fake gh: $*" >&2; exit 1; }
 jqf() { jq "$@" | tr -d '\r'; }
+# exclusive <issue file>: fails (and leaves the issue as it was) when a label change would give the issue
+# two labels of one exclusive group of factory/labels.json, so every test catches a script that adds
+# state:ready without taking state:running off.
+labels_json="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/labels.json"
+exclusive() {
+  local bad
+  bad=$(jqf -r --slurpfile defs "$labels_json" '
+    ($defs[0] | [.labels[] | select(.group as $g | $defs[0].groups[$g].exclusive) | {key: .name, value: .group}]
+      | from_entries) as $ex
+    | [.labels[].name | $ex[.] // empty] | group_by(.) | map(select(length > 1) | .[0]) | join(",")' "$1")
+  [ -z "$bad" ] || { rm -f "$1"; fail "two labels of exclusive group $bad on $(basename "$1" .new)"; }
+}
 
 # Calls of dispatch-next.sh (odin.sh tests, #252):
 #   gh issue list … --label <l> --json number [--jq <expr>]   open issues (not PRs) with label <l>
@@ -37,18 +49,19 @@ jqf() { jq "$@" | tr -d '\r'; }
 #   gh api … --jq <expr>                                      the same call, filtered through jq -r
 case "${1:-}" in
   issue)
-    # gh issue view <n> … [--jq <expr>]: {state (upper case), labels}; gh issue edit <n> --add-label <l>;
+    # gh issue view <n> … [--jq <expr>]: {state (upper case), labels}; gh issue edit <n> --add-label <l> / --remove-label <l>;
     # gh issue close <n> …: sets state closed (#280).
     case "${2:-}" in
       view|edit|close)
         sub=$2 n=$3; shift 3
         f="$d/issue-$n.json"
         [ -f "$f" ] || fail "no issue #$n"
-        expr= add=
+        expr= add= rm=
         while [ $# -gt 0 ]; do
           case "$1" in
             --jq) expr=$2; shift 2 ;;
             --add-label) add=$2; shift 2 ;;
+            --remove-label) rm=$2; shift 2 ;;
             --repo|--json|--reason|--comment) shift 2 ;;
             *) fail "unsupported issue $sub argument $1" ;;
           esac
@@ -58,9 +71,10 @@ case "${1:-}" in
             out=$(jqf '{state: (.state | ascii_upcase), labels}' "$f")
             if [ -n "$expr" ]; then printf '%s' "$out" | jqf -r "$expr"; else printf '%s\n' "$out"; fi ;;
           edit)
-            [ -n "$add" ] || fail "unsupported issue edit"
-            jqf --arg l "$add" 'if any(.labels[]; .name == $l) then . else .labels += [{name: $l}] end' "$f" \
-              > "$f.new" && mv "$f.new" "$f" ;;
+            [ -n "$add$rm" ] || fail "unsupported issue edit"
+            jqf --arg l "$add" --arg r "$rm" '.labels |= map(select(.name != $r))
+              | if $l == "" or any(.labels[]; .name == $l) then . else .labels += [{name: $l}] end' "$f" \
+              > "$f.new" && exclusive "$f.new" && mv "$f.new" "$f" ;;
           close)
             jqf '.state = "closed"' "$f" > "$f.new" && mv "$f.new" "$f" ;;
         esac
@@ -117,6 +131,31 @@ case "${1:-}" in
     list=$(jqf --arg w "$wf" --argjson l "$limit" '[.[] | select($w == "" or .workflow == $w)] | .[:$l]' "$f")
     if [ -n "$expr" ]; then printf '%s' "$list" | jqf -r "$expr"; else printf '%s\n' "$list"; fi
     exit 0 ;;
+  label)
+    # gh label list --json name,color,description: repo-labels.json (default []); gh label edit <name>
+    # [--name N] [--color C] [--description D] / gh label create <name> --color C --description D change it.
+    f="$d/repo-labels.json"; [ -f "$f" ] || echo '[]' > "$f"
+    sub=${2:-}; name=${3:-}
+    case "$sub" in
+      list) cat "$f"; exit 0 ;;
+      edit|create)
+        shift 3; new=$name color= desc=
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --name) new=$2; shift 2 ;; --color) color=$2; shift 2 ;; --description) desc=$2; shift 2 ;;
+            --repo) shift 2 ;; *) fail "unsupported label argument $1" ;;
+          esac
+        done
+        has=$(jqf --arg n "$name" 'any(.[]; .name == $n)' "$f")
+        if [ "$sub" = edit ] && [ "$has" != true ]; then fail "no label $name"; fi
+        if [ "$sub" = create ] && [ "$has" = true ]; then fail "label $name exists"; fi
+        jqf --arg n "$name" --arg m "$new" --arg c "$color" --arg s "$desc" '
+          (if any(.[]; .name == $n) then . else . + [{name: $n, color: "", description: ""}] end)
+          | map(if .name == $n then .name = $m | (if $c != "" then .color = $c else . end)
+                | (if $s != "" then .description = $s else . end) else . end)' "$f" > "$f.new" && mv "$f.new" "$f"
+        exit 0 ;;
+      *) fail "unsupported command: $*" ;;
+    esac ;;
   workflow)
     # gh workflow run <file> --repo R -f k=v …: adds a queued workflow_dispatch run to runs-list.json
     # (title as the workflow's run-name; not while runs-hidden exists: a run not listed yet).
@@ -366,7 +405,8 @@ case "$path" in
     f="$d/issue-$n.json"
     [ -f "$f" ] || fail "no issue #$n"
     l=$(field 'labels[]') || fail "no label"
-    jqf --arg l "$l" 'if any(.labels[]; .name == $l) then . else .labels += [{name: $l}] end' "$f" > "$f.new" && mv "$f.new" "$f"
+    jqf --arg l "$l" 'if any(.labels[]; .name == $l) then . else .labels += [{name: $l}] end' "$f" > "$f.new" \
+      && exclusive "$f.new" && mv "$f.new" "$f"
     echo '[]'
     ;;
   # ledger.sh sub_issue_parent: …/issues/<n>/parent, parent-<n>.json (the parent issue), else 404.

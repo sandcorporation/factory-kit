@@ -47,6 +47,7 @@
 # rounds before a human, default 2). Needs bash, gh and jq.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib/labels.sh"
 REPO=${REPO:-${GITHUB_REPOSITORY:-}}
 BASE=${BASE:-main}
 PR_HUMAN='<!-- factory-odin-human -->'
@@ -122,7 +123,7 @@ state() {
 verdict() {
   local s=$1 file=${2:-.factory/odin-verdict} v
   v=$(tr -d '[:space:]' < "$file" 2> /dev/null || true)
-  if has_label "$s" wait:decision || [ "$v" = question ]; then
+  if has_label "$s" "${L_DECISION}" || [ "$v" = question ]; then
     output verdict=question
   elif [ "$v" = pass ] || [ "$v" = fixed ]; then
     output verdict=go
@@ -137,11 +138,11 @@ verdict() {
 question() {
   local s=$1 pr=$2 report=${3:-}
   if [ -n "$report" ] && [ -s "$report" ]; then
-    comment "$pr" "Odin$(run_link): 질문으로 멈춤(#$s의 \`wait:decision\`)
+    comment "$pr" "Odin$(run_link): 질문으로 멈춤(#$s의 \`${L_DECISION}\`)
 
 $(cat "$report")" || echo "::warning::could not comment on PR #$pr"
   fi
-  echo "::notice::#$s waits for an answer (wait:decision); spec PR #$pr stays open"
+  echo "::notice::#$s waits for an answer (${L_DECISION}); spec PR #$pr stays open"
 }
 
 human() {
@@ -152,7 +153,7 @@ human() {
 Odin$(run_link): 병합하지 않음
 
 $reason" || echo "::warning::could not comment on PR #$pr"
-  bash "$here/hand-to-human.sh" "$s" spec-merge-failed "Odin이 스펙 PR #$pr을 병합하지 못했다$(run_link). 공장은 이 spec을 더 돌리지 않는다: 사람이 아래 까닭을 보고 스펙 PR을 고친 뒤 \`state:human\`을 떼고 Odin을 다시 돌린다(\`factory-odin.yml\`, 입력 spec=$s).
+  bash "$here/hand-to-human.sh" "$s" spec-merge-failed "Odin이 스펙 PR #$pr을 병합하지 못했다$(run_link). 공장은 이 spec을 더 돌리지 않는다: 사람이 아래 까닭을 보고 스펙 PR을 고친 뒤 \`${L_HUMAN}\`을 떼고 Odin을 다시 돌린다(\`factory-odin.yml\`, 입력 spec=$s).
 
 $reason" || echo "::warning::could not hand #$s to a human"
 }
@@ -174,7 +175,7 @@ start_chain() {
       continue
     fi
     approved="$approved $n"
-    add_label "$n" state:ready || echo "::warning::could not label #$n state:ready"
+    add_label "$n" "${L_READY}" || echo "::warning::could not label #$n ${L_READY}"
   done
   echo "approved: $(echo $approved)"
   if [ -n "${FACTORY_DISPATCH_NEXT:-}" ]; then

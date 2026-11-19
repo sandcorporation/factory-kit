@@ -34,7 +34,7 @@ issue() {
       issue_dependencies_summary: {blocked_by: $b}}' > "$FAKE_GH/issue-$1.json"
 }
 ticket() { # ticket <n> [blocked_by]: a ticket of spec #50
-  issue "$1" "model:sonnet" "${2:-0}" "## Parent
+  issue "$1" "" "${2:-0}" "## Parent
 
 #50
 
@@ -52,7 +52,7 @@ setup() {
   mkdir -p "$FAKE_GH"
   : > "$FAKE_GH/calls.log"
   : > "$GITHUB_OUTPUT"
-  issue 50 spec
+  issue 50 kind:spec
   ticket 61 1
   ticket 62
   ticket 63
@@ -67,7 +67,7 @@ setup() {
   jq -n --argjson c "${2:-2}" \
     '{number: 70, state: "open", merged: false, changed_files: $c, head: {ref: "factory/spec-50"}}' \
     > "$FAKE_GH/pull-70.json"
-  jq -n '{number: 70, state: "open", body: "", labels: [{name: "spec-pr"}], pull_request: {}}' \
+  jq -n '{number: 70, state: "open", body: "", labels: [], pull_request: {}}' \
     > "$FAKE_GH/issue-70.json"
 }
 
@@ -173,7 +173,7 @@ fi
 
 setup pass-local
 # A ticket that changes workflow files is not approved but left to a local worker (#389).
-issue 62 "model:sonnet" 0 "## Parent
+issue 62 "" 0 "## Parent
 
 #50
 
@@ -181,7 +181,7 @@ issue 62 "model:sonnet" 0 "## Parent
 bash "$odin" pass 50 70 > "$tmp/log" 2>&1
 eq "exit" 0 "$?"
 eq "the others approved" "61 63" "$(approved)"
-eq "#62 is local" "kind:local,model:sonnet,state:human" "$(labels_of 62)"
+eq "#62 is local" "kind:local,state:human" "$(labels_of 62)"
 eq "first dispatch skips it" 63 "$(dispatched)"
 
 setup pass-search-lags

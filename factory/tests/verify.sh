@@ -424,7 +424,7 @@ has "and for the other" "the guard stops #9 (wait:decision)" "$(cat "$tmp/out")"
 
 setup next-verify-one-guarded
 issue 8 state:running; issue 9 state:running
-issue 20 kind:spec,wait:budget; issue 21 spec
+issue 20 kind:spec,wait:budget; issue 21 kind:spec
 under 8 20; under 9 21
 waiting 41 8; waiting 45 9
 bash "$verify" next-verify 40 > /dev/null 2>&1

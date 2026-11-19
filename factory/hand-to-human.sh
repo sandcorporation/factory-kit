@@ -51,21 +51,22 @@ case "$n" in '' | *[!0-9]*) usage ;; esac
 case " $CODES " in *" $code "*) ;; *) echo "hand-to-human: unknown code [$code]" >&2; usage ;; esac
 [ -n "$reason" ] || usage
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib/labels.sh"
 HUMAN="<!-- factory-human $code -->"
-LABEL=state:human
+LABEL="${L_HUMAN}"
 
 labels=$(gh api "repos/$REPO/issues/$n" --jq '[.labels[].name] | join(",")' | tr -d '\r') \
   || { echo "::warning::hand-to-human: could not read the labels of #$n"; labels=; }
 # A deferred issue was put off by a person: every caller (local-ticket, odin, decompose, implementer,
 # verify) leaves it as it is instead of putting state:human back (#473).
-case ",$labels," in *,state:deferred,*)
+case ",$labels," in *,"${L_DEFERRED}",*)
   echo "::warning::hand-to-human: #$n is deferred; not handing it over ($code)"
   exit 0 ;;
 esac
 # Handed over once already with this code, and a person since took state:human off without putting
 # the issue back in the factory (no state:ready, no state:running): they have it. Handing it over again
 # would put the label back and mail the same reason again (#473).
-case ",$labels," in *,state:human,* | *,state:ready,* | *,state:running,*) ;; *)
+case ",$labels," in *,"${L_HUMAN}",* | *,"${L_READY}",* | *,"${L_RUNNING}",*) ;; *)
   said=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --paginate \
     | jq -rs --arg m "$HUMAN" '[.[][] | select(.body | startswith($m))] | length' | tr -d '\r') || said=0
   if [ "${said:-0}" -gt 0 ] 2> /dev/null; then
@@ -73,7 +74,7 @@ case ",$labels," in *,state:human,* | *,state:ready,* | *,state:running,*) ;; *)
     exit 0
   fi ;;
 esac
-for l in state:running state:ready; do
+for l in "${L_RUNNING}" "${L_READY}"; do
   case ",$labels," in *",$l,"*)
     gh api -X DELETE "repos/$REPO/issues/$n/labels/$l" > /dev/null \
       || echo "::warning::hand-to-human: could not take $l off #$n" ;;

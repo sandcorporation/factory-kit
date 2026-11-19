@@ -18,9 +18,10 @@
 # Environment: FACTORY_REPO owner/name (default sandcorporation/facet), BENCH_WORKFLOW the workflow file
 # (default bench.yml). gh must be logged in. Needs bash, gh and jq.
 set -u -o pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/labels.sh"
 REPO=${FACTORY_REPO:-sandcorporation/facet}
 WORKFLOW=${BENCH_WORKFLOW:-bench.yml}
-LABEL=bench-alert
+LABEL="${L_BENCH_ALERT}"
 
 # last_success: head_sha of the newest successful run of the workflow on main, or nothing.
 last_success() {
