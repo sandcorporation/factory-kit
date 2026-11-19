@@ -89,6 +89,16 @@ run 249
 eq action skip "$(out action)"
 eq dispatches "" "$(dispatched)"
 
+setup "a deferred spec does not resume, even with an open spec PR (#437)"
+issue 249 kind:spec,state:deferred
+subs 249 301:open
+pull 43 open factory/spec-249
+run 249
+eq code 0 "$(code)"
+eq action skip "$(out action)"
+eq dispatches "" "$(dispatched)"
+eq next 0 "$(nexts)"
+
 setup "a spec over its budget does not resume"
 issue 249 kind:spec "예산: \$10"
 issue 900 kind:ledger

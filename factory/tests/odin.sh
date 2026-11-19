@@ -111,6 +111,12 @@ jq -n '[{number: 71, state: "open", head: {ref: "factory/spec-5"}}]' > "$FAKE_GH
 bash "$odin" state 50 > /dev/null 2>&1
 eq "another spec's PR is not ours" none "$(out mode)"
 
+setup state-deferred
+issue 50 kind:spec,state:deferred
+bash "$odin" state 50 > /dev/null
+eq "a deferred spec is left alone (#437)" deferred "$(out mode)"
+eq "no pr picked" "" "$(out pr)"
+
 # --- verdict -------------------------------------------------------------------------------------
 
 for v in pass fixed question nonsense; do
@@ -131,6 +137,24 @@ echo pass > "$tmp/verdict"
 bash "$odin" verdict 50 "$tmp/verdict" > /dev/null
 eq "wait:decision makes it a question" question "$(out verdict)"
 
+setup verdict-deferred
+issue 50 kind:spec,state:deferred,wait:decision
+echo pass > "$tmp/verdict"
+bash "$odin" verdict 50 "$tmp/verdict" > /dev/null
+eq "state:deferred wins over the verdict (#437)" deferred "$(out verdict)"
+
+for step in question pass empty; do
+  setup "deferred-$step"
+  issue 50 kind:spec,state:deferred
+  bash "$odin" "$step" 50 70 > /dev/null 2>&1
+  eq "$step on a deferred spec exits 0" 0 "$?"
+  eq "$step: result" deferred "$(out result)"
+  eq "$step: not merged" false "$(merged)"
+  eq "$step: no ticket approved" "" "$(approved)"
+  eq "$step: nothing dispatched" "" "$(dispatched)"
+  eq "$step: no comment" "" "$(pr_comments)"
+done
+
 # --- question: nothing merged, nothing approved ---------------------------------------------------
 
 setup question
@@ -147,10 +171,12 @@ eq "spec keeps wait:decision" "wait:decision,kind:spec" "$(labels_of 50)"
 
 # --- pass: merge, approve, dispatch the lowest unblocked ticket -----------------------------------
 
-runs_left() { jq -r '[.[].id] | join(",")' "$FAKE_GH/runs.json" | tr -d ''; }
+runs_left() { jq -r '[.[].id] | join(",")' "$FAKE_GH/runs.json" | tr -d '
+'; }
 
 setup pass
-jq -n '[{id: 1, event: "pull_request", head_branch: "factory/spec-50", triggering_actor: {login: "github-actions[bot]"}, jobs: 0}]' | tr -d '' > "$FAKE_GH/runs.json"
+jq -n '[{id: 1, event: "pull_request", head_branch: "factory/spec-50", triggering_actor: {login: "github-actions[bot]"}, jobs: 0}]' | tr -d '
+' > "$FAKE_GH/runs.json"
 printf -- '- 이름 불일치 하나를 고쳤다\n' > "$tmp/report.md"
 bash "$odin" pass 50 70 "$tmp/report.md" > "$tmp/log" 2>&1
 eq "exit" 0 "$?"
@@ -218,7 +244,8 @@ lacks "branch kept" "git/refs/heads/factory/spec-50" "$(calls)"
 # --- empty spec PR --------------------------------------------------------------------------------
 
 setup empty 0
-jq -n '[{id: 1, event: "pull_request", head_branch: "factory/spec-50", triggering_actor: {login: "github-actions[bot]"}, jobs: 0}]' | tr -d '' > "$FAKE_GH/runs.json"
+jq -n '[{id: 1, event: "pull_request", head_branch: "factory/spec-50", triggering_actor: {login: "github-actions[bot]"}, jobs: 0}]' | tr -d '
+' > "$FAKE_GH/runs.json"
 bash "$odin" empty 50 70 > /dev/null 2>&1
 eq "exit" 0 "$?"
 eq "closed" closed "$(jq -r .state "$FAKE_GH/pull-70.json" | tr -d '\r')"

@@ -25,7 +25,8 @@
 #    needs-triage, needs-info and local are not mailed; state:human together with local is mailed as
 #    「로컬 작업자 몫」 (the factory left the ticket outside itself; a local worker implements it). An issue
 #    a person deferred (label `state:deferred`,
-#    #437) waits for nobody: it is not mailed as state:human even when that label was left on.
+#    #437) waits for nobody: none of the labels above is mailed for it (a question on a deferred spec
+#    included), even when the label was left on.
 #
 #    state:human and wait:budget are mailed only when the last `labeled` event is by
 #    github-actions[bot] or a BRIDGE_TRUSTED_BOTS login (#502). Put on by a person (a coordinator
@@ -280,7 +281,7 @@ for label in "${L_DECISION}" "${L_HUMAN}" "${L_BUDGET}" "${L_CHECK}"; do
   numbers=$(printf '%s' "$list" | j -s -r --arg l "$label" 'add // [] | .[]
     | select(.state == "open" and any(.labels[]; .name == $l))
     | select($l != "'"${L_CHECK}"'" or ((.body // "") | test("(^|\n)[ \t]*[-*+] \\[ \\]")))
-    | select($l != "'"${L_HUMAN}"'" or (any(.labels[]; .name == "'"${L_DEFERRED}"'") | not))
+    | select(any(.labels[]; .name == "'"${L_DEFERRED}"'") | not)
     | .number')
   case $label in
     "${L_DECISION}")

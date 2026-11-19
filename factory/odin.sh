@@ -101,8 +101,14 @@ open_tickets() {
 
 state() {
   local s=$1 pr files
-  pr=$(spec_pr "$s")
   output "branch=$(branch_of "$s")"
+  # A spec a person put off (`state:deferred`, #437): Odin neither reviews nor asks nor starts the chain.
+  if has_label "$s" "${L_DEFERRED}"; then
+    echo "::notice::#$s is deferred (${L_DEFERRED}); Odin does nothing"
+    output mode=deferred
+    return 0
+  fi
+  pr=$(spec_pr "$s")
   if [ -z "$pr" ]; then
     echo "::warning::#$s has no open spec PR ($(branch_of "$s")); nothing for Odin to review"
     output mode=none
@@ -123,7 +129,10 @@ state() {
 verdict() {
   local s=$1 file=${2:-.factory/odin-verdict} v
   v=$(tr -d '[:space:]' < "$file" 2> /dev/null || true)
-  if has_label "$s" "${L_DECISION}" || [ "$v" = question ]; then
+  if has_label "$s" "${L_DEFERRED}"; then
+    echo "::notice::#$s is deferred (${L_DEFERRED}); Odin's verdict is set aside"
+    output verdict=deferred
+  elif has_label "$s" "${L_DECISION}" || [ "$v" = question ]; then
     output verdict=question
   elif [ "$v" = pass ] || [ "$v" = fixed ]; then
     output verdict=go
@@ -277,6 +286,16 @@ $list"; then
 }
 
 : "${REPO:?REPO is not set}"
+# A spec a person put off (`state:deferred`, #437) is not merged, asked about, handed on or started,
+# whatever step the workflow reaches.
+case "${1:-}" in
+  question | human | pass | empty | conflict)
+    if [ -n "${2:-}" ] && has_label "$2" "${L_DEFERRED}"; then
+      echo "::notice::#$2 is deferred (${L_DEFERRED}); odin.sh $1 does nothing"
+      output result=deferred
+      exit 0
+    fi ;;
+esac
 case "${1:-}" in
   state) [ $# -eq 2 ] || usage; state "$2" ;;
   verdict) [ $# -ge 2 ] || usage; verdict "$2" "${3:-}" ;;

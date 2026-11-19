@@ -124,7 +124,26 @@ subs 249 301:open 302:closed
 state 249
 eq mode done "$(out mode)"
 
+setup "state: a deferred spec is left alone even with a question or a spec PR (#437)"
+issue 249 kind:spec,state:deferred,wait:decision
+subs 249 301:open
+pull 43 open factory/spec-249
+state 249
+eq mode deferred "$(out mode)"
+
 # --- finish --------------------------------------------------------------------------------
+
+setup "finish: a deferred spec leaves no PR, branch, dispatch or question (#437)"
+issue 249 kind:spec,state:deferred
+subs 249 301:open
+issue 301 state:ready
+finish 249 decomposed
+eq code 0 "$(cat "$tmp/code")"
+eq result deferred "$(out result)"
+eq "pull requests" 0 "$(pull_count)"
+eq dispatches 0 "$(dispatches)"
+eq branch no "$(remote_branch 249)"
+eq "#301 labels" state:ready "$(labels_of 301)"
 
 setup "finish: a question (new spec) leaves no PR, branch, dispatch or state:ready"
 issue 249 kind:spec,wait:decision

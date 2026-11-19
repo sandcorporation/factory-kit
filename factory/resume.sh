@@ -95,6 +95,9 @@ resume() {
     new | decomposed | question)
       dispatch factory-decompose.yml "issue=$s" || return 1
       output action=decompose ;;
+    deferred)
+      echo "::notice::spec #$s is deferred (${L_DEFERRED}); nothing to resume"
+      output action=skip ;;
     specpr)
       bash "$here/decompose.sh" dispatch-odin "$s"
       output action=odin ;;

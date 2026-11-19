@@ -4,6 +4,8 @@
 #   decompose.sh state <S>          decide what the Decompose run of spec #S has to do. Writes to
 #                                   $GITHUB_OUTPUT (stdout when unset):
 #                                     mode=question    the spec has `wait:decision`: wait for the answer
+#                                     mode=deferred    the spec has `state:deferred`: a person put it off;
+#                                                      nothing runs (finish also stops: result=deferred)
 #                                     mode=specpr      an open spec PR (head factory/spec-<S>) exists: no agent,
 #                                                      only dispatch Odin
 #                                     mode=new         the spec has no sub-issues: create tickets and their tests
@@ -82,6 +84,8 @@ has_tests() {
 
 state() {
   local s=$1 pr n missing=
+  # A spec a person put off (`state:deferred`, #437) waits for nobody: no agent, no Odin, no question.
+  if has_label "$s" "${L_DEFERRED}"; then output mode=deferred; return; fi
   if has_label "$s" "${L_DECISION}"; then output mode=question; return; fi
   pr=$(spec_pr "$s")
   if [ -n "$pr" ]; then output mode=specpr; output "pr=$pr"; return; fi
@@ -141,6 +145,10 @@ budget() {
 }
 
 dispatch_odin() {
+  if has_label "$1" "${L_DEFERRED}"; then
+    echo "::notice::#$1 is deferred (${L_DEFERRED}); Odin is not dispatched"
+    return 0
+  fi
   if gh api -X POST "repos/$REPO/actions/workflows/factory-odin.yml/dispatches" \
     -f "ref=$BASE" -f "inputs[spec]=$1" > /dev/null; then
     echo "dispatched factory-odin.yml for #$1"
@@ -151,6 +159,11 @@ dispatch_odin() {
 
 finish() {
   local s=$1 mode=$2 n tickets branch title list body pr
+  if has_label "$s" "${L_DEFERRED}"; then
+    echo "::notice::#$s is deferred (${L_DEFERRED}); no spec PR, no question, no dispatch"
+    output result=deferred
+    return 0
+  fi
   tickets=$(open_tickets "$s")
   # A ticket that changes `.github/workflows/` stays out of the factory (local-ticket.sh, #389).
   for n in $tickets; do

@@ -264,6 +264,8 @@ for s in ${FACTORY_SPEC_QUEUE:-}; do
   read -r state labels < <(gh issue view "$s" --repo "$REPO" --json state,labels --jq '[.state, ([.labels[].name] | join(","))] | @tsv')
   [ "$state" = OPEN ] || continue
   case ",$labels," in *,"${L_SPEC}",*) continue;; esac
+  # A spec a person put off (`state:deferred`, #437) is not started from the queue.
+  case ",$labels," in *,"${L_DEFERRED}",*) continue;; esac
   pending="$pending $s"
 done
 idle() {

@@ -120,6 +120,15 @@ run
 eq code 0 "$(code)"
 eq sends 0 "$(sent_count)"
 
+for l in wait:decision wait:budget wait:check; do
+  setup "a deferred issue left with $l is not mailed (#437)"
+  issue 302 open "$l,state:deferred,kind:spec" "미룬 spec" "- [ ] 확인"
+  labeled 302 "$l" 2026-11-18T01:00:00Z
+  run
+  eq code 0 "$(code)"
+  eq sends 0 "$(sent_count)"
+done
+
 setup "a deferred blocker marker is mailed as 공장 막힘(미룸) with its own what to do (#437)"
 issue 900 open kind:ledger "장부"
 comment 19 900 "<!-- factory-stalled deferred-301-302 -->

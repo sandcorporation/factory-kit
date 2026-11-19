@@ -169,6 +169,13 @@ FACTORY_SPEC_QUEUE=" 60  61 " run
 eq "a new queue" "<!-- factory-idle 60-61-62 --> <!-- factory-idle 60-61 -->" "$(marked '<!-- factory-idle')"
 eq "queue-empty not again" "<!-- factory-queue-empty 61 -->" "$(marked '<!-- factory-queue-empty')"
 
+setup "a deferred spec in the queue is not started (#437)"
+spec 50 spec; ledger; spec 60 "state:deferred"; spec 61 ""
+FACTORY_SPEC_QUEUE="60 61" run
+eq code 0 "$(code)"
+eq "decompose skips the deferred spec" 61 "$(decomposed)"
+eq "#60 not labelled" false "$(jq 'any(.labels[]; .name == "kind:spec")' "$FAKE_GH/issue-60.json" | tr -d '')"
+
 setup "a closed ticket the search still lists is not running"
 spec 50 spec; ledger; spec 60 spec closed
 jq '.state = "closed"' "$FAKE_GH/issue-50.json" | tr -d '\r' > "$FAKE_GH/i" && mv "$FAKE_GH/i" "$FAKE_GH/issue-50.json"
