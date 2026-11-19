@@ -3,7 +3,7 @@
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 script="$here/../resume.sh"
-workflow="$here/../../workflows/factory-resume.yml"
+workflow="$here/../../.github/workflows/factory-resume.yml"
 export PATH="$here/fake:$PATH"
 export REPO=owner/repo
 
@@ -213,18 +213,13 @@ eq code 1 "$(code)"
 
 # --- workflow ------------------------------------------------------------------------------
 
-# The kit does not ship factory-resume.yml yet (the reusable workflows are the next step), so these
-# checks run only where the file exists and say they were skipped otherwise.
-if [ -f "$workflow" ]; then
-  current="workflow: unlabeled trigger for the two stop labels on spec issues"
-  eq "unlabeled" 1 "$(grep -c 'types: \[unlabeled\]' "$workflow")"
-  eq "wait:decision" 1 "$(grep -c "github.event.label.name == 'wait:decision'" "$workflow")"
-  eq "wait:budget" 1 "$(grep -c "github.event.label.name == 'wait:budget'" "$workflow")"
-  eq "spec label" 1 "$(grep -c "contains(github.event.issue.labels.\*.name, 'kind:spec')" "$workflow")"
-  eq "script" 1 "$(grep -c 'resume.sh "\$SPEC"' "$workflow")"
-else
-  echo "  SKIP workflow wiring: no $(basename "$workflow") in the kit yet (reusable workflow step)"
-fi
+[ -f "$workflow" ] || bad "workflow file missing: $workflow"
+current="workflow: unlabeled trigger for the two stop labels on spec issues"
+eq "unlabeled" 1 "$(grep -c "github.event.action == 'unlabeled'" "$workflow")"
+eq "wait:decision" 1 "$(grep -c "github.event.label.name == 'wait:decision'" "$workflow")"
+eq "wait:budget" 1 "$(grep -c "github.event.label.name == 'wait:budget'" "$workflow")"
+eq "spec label" 1 "$(grep -c "contains(github.event.issue.labels.\*.name, 'kind:spec')" "$workflow")"
+eq "script" 1 "$(grep -c 'resume.sh "\$SPEC"' "$workflow")"
 
 echo "resume.sh: $passes passed, $fails failed"
 [ "$fails" -eq 0 ]

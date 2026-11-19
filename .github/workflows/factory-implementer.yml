@@ -47,7 +47,6 @@ on:
           auto (default): resolve conflicts only when Verify's last send-back of the ticket was a
           conflict and its PR is still open (verify.sh conflict-pr), else implement;
           implement: implement from main; conflict: resolve conflicts on the open PR only (#307)
-        options: [auto, implement, conflict]
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
@@ -163,7 +162,7 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           SENDER: ${{ github.event.sender.login }}
         run: bash ${{ env.FACTORY_KIT }}/factory/parent-check.sh "$ISSUE" "$SENDER"
-      # A ticket that changes `.github/workflows/` is a local worker's (`ready-for-human` + `local`).
+      # A ticket that changes `.github/workflows/` is a local worker's (`state:human` + `local`).
       - name: Keep workflow tickets out
         id: local
         if: steps.parent.outputs.ok == 'true'
@@ -322,6 +321,7 @@ jobs:
           # Opus only for hard tickets (Windows API, OLE, concurrency safety); never Fable.
           model=${{ env.FACTORY_MODELS_DEFAULT }}
           case ",$labels," in *,model:strong,*) model=${{ env.FACTORY_MODELS_STRONG }};; esac
+          # shellcheck disable=SC2016 # jq program, not shell
           fails=$(gh issue view "$N" --repo "$REPO" --json comments --jq '[.comments[].body] | (map(startswith("<!-- factory-reset -->")) | rindex(true)) as $r | [.[(if $r == null then 0 else $r + 1 end):][] | select(contains("<!-- factory-implementer-failed -->") or startswith("<!-- factory-sendback"))] | length')
           if [ "$fails" -gt 0 ]; then model=${{ env.FACTORY_MODELS_STRONG }}; fi
           echo "::notice::#$N runs on $model (earlier code failures and send-backs: $fails)"
@@ -352,10 +352,8 @@ jobs:
 
         run: ${{ env.FACTORY_SETUP || 'true' }}
 
-      - if: env.FACTORY_CACHE == 'rust'
-
+      - if: env.FACTORY_CACHE == 'rust' && steps.guard.outputs.go == 'true'
         uses: Swatinem/rust-cache@v2
-        if: steps.guard.outputs.go == 'true'
 
       # The action's own installer is a shell script that refuses Windows, so install
       # the native Windows build and hand the action its path.
@@ -667,7 +665,7 @@ jobs:
 
       # A code failure (the automated checks failed) counts toward the model rule: one puts the
       # ticket back in the queue and the retry runs on Opus, two leave it to the managing session
-      # (`ready-for-human`, ADR-0001).
+      # (`state:human`, ADR-0001).
       # Any other failure (runner, network, installer, agent action crash) has nothing to do
       # with the code: retry on the same model (decision 2026-11-16), and hand the ticket
       # to the managing session only after three of them. A run whose agent left the
@@ -690,7 +688,7 @@ jobs:
           if [ "${{ steps.commits.outcome }}" = failure ]; then
             started=$(gh api "repos/$REPO/actions/runs/${{ github.run_id }}" --jq .run_started_at) || started=
           fi
-          bash ${{ env.FACTORY_KIT }}/factory/record-failure.sh "$N" "$what" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" $started
+          bash ${{ env.FACTORY_KIT }}/factory/record-failure.sh "$N" "$what" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" "$started"
 
       # Refill the tracks (#286): this run's track is free once it ends (dispatch-next.sh does not
       # count the run calling it), so the next ticket waits in the track's group for this run only.

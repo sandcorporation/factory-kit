@@ -78,7 +78,7 @@ eq "after swap" "state:ready,wait:decision,wait:check" "$(j -r '[.labels[].name]
 # --- sync: dry run changes nothing, --apply renames in place, creates and reports removed ones
 current=sync
 mkdir -p "$root/sync"
-export FAKE_GH="$root/sync" LABELS_SNAPSHOT_DIR="$root/sync/snap"
+export FAKE_GH="$root/sync" LABELS_SNAPSHOT_DIR="$root/sync/snap" FACTORY_REPO_DIR="$root/sync"
 : > "$FAKE_GH/calls.log"
 jq -n '[{name: "ready-for-agent", color: "0E8A16", description: "old"},
         {name: "spec-pr", color: "ffffff", description: ""},
@@ -108,15 +108,16 @@ current=foreign
 : > "$FAKE_GH/calls.log"
 jq -n '[{name: "ready-for-agent", color: "0E8A16", description: "old"},
         {name: "needs-triage", color: "ededed", description: "theirs"},
-        {name: "team: web", color: "123456", description: "a label of the repository"}]' > "$FAKE_GH/repo-labels.json"
-foreign() { j -S '[.[] | select(.name == "needs-triage" or .name == "team: web")
+        {name: "team: web", color: "123456", description: "a label of the repository"},
+        {name: "bug", color: "d73a4a", description: "Something is not working"}]' > "$FAKE_GH/repo-labels.json"
+foreign() { j -S '[.[] | select(.name == "needs-triage" or .name == "team: web" or .name == "bug")
   | {name, color: (.color | ascii_downcase), description}] | sort_by(.name)' "$1"; }
 foreign "$FAKE_GH/repo-labels.json" > "$root/sync/foreign-before.json"
 bash "$factory/labels-sync.sh" --apply > /dev/null 2>&1
 eq "apply exit (foreign)" 0 "$?"
 eq "foreign labels unchanged" "$(cat "$root/sync/foreign-before.json")" "$(foreign "$FAKE_GH/repo-labels.json")"
 eq "foreign labels in the after snapshot" "$(cat "$root/sync/foreign-before.json")" "$(foreign "$root/sync/snap/after.json")"
-eq "no call names a foreign label" 0 "$(grep -cE 'needs-triage|team: web' "$FAKE_GH/calls.log")"
+eq "no call names a foreign label" 0 "$(grep -cE 'needs-triage|team: web|"bug"|bug' "$FAKE_GH/calls.log")"
 
 # --- sync: old names in the repository's files are reported from the configured paths only
 current=scan

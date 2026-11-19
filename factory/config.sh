@@ -24,6 +24,7 @@ runners.default|ubuntu-latest
 runners.implement|@runners.default
 runners.verify|@runners.default
 setup|
+cache|
 checks.full|
 checks.kill|
 checks.quick|

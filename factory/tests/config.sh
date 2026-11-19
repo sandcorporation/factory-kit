@@ -24,8 +24,10 @@ eq "default runner" ubuntu-latest "$(get runners_implement out)"
 eq "default strong model" claude-opus-5-5 "$(get models_odin out)"
 eq "repository from GitHub" own/repo "$(get FACTORY_REPO env)"
 eq "default scan" .github/ "$(get FACTORY_LABELS_SCAN env)"
+eq "default cache is off" "" "$(get FACTORY_CACHE env)"
+grep -q "^FACTORY_CACHE=$" "$root/env" && ok || bad "FACTORY_CACHE not written"
 
-run $'# c\nrepository: a/b\nbase: trunk   # comment\nrunners:\n  default: big\nchecks:\n  full: "make check # all"\n  kill: \'x.exe\'\nmodels:\n  strong: s1\nenv:\n  FOO: 1\n'
+run $'# c\nrepository: a/b\nbase: trunk   # comment\ncache: rust\nrunners:\n  default: big\nchecks:\n  full: "make check # all"\n  kill: \'x.exe\'\nmodels:\n  strong: s1\nenv:\n  FOO: 1\n'
 eq "exit" 0 "$code"
 eq "repository" a/b "$(get FACTORY_REPO env)"
 eq "plain value drops comment" trunk "$(get base out)"
@@ -36,6 +38,7 @@ eq "single quotes" x.exe "$(get checks_kill out)"
 eq "decompose follows strong" s1 "$(get models_decompose out)"
 eq "verify model follows default" claude-sonnet-5-5 "$(get models_verify out)"
 eq "env entry" 1 "$(get FOO env)"
+eq "cache" rust "$(get FACTORY_CACHE env)"
 
 run $'setup: |\n  one\n\n    two\nbase: x\n'
 eq "block exit" 0 "$code"

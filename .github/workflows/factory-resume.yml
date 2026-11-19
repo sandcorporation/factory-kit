@@ -66,8 +66,9 @@ jobs:
     needs: config
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      ((github.event.label.name == 'wait:decision' || github.event.label.name == 'wait:budget') &&
-       contains(github.event.issue.labels.*.name, 'spec'))
+      (github.event.action == 'unlabeled' &&
+       (github.event.label.name == 'wait:decision' || github.event.label.name == 'wait:budget') &&
+       contains(github.event.issue.labels.*.name, 'kind:spec'))
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 10
     env:

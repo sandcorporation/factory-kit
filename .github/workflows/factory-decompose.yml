@@ -88,6 +88,17 @@ jobs:
           git init -q "$d" && git -C "$d" fetch -q --depth 1 "https://github.com/$KIT" "$KIT_REF" && git -C "$d" -c advice.detachedHead=false checkout -q FETCH_HEAD
           echo "FACTORY_KIT=$d" >> "$GITHUB_ENV"
           bash "$d/factory/config.sh"
+      - name: App token (push, pull requests only)
+        id: app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Hand the App token to the push and pull request commands
+        shell: bash
+        run: echo "FACTORY_APP_TOKEN=${{ steps.app.outputs.token }}" >> "$GITHUB_ENV"
 
       # Spec #249 "비용 장부와 상한": stop on wait:decision / wait:budget and on the
       # spec and daily budgets (${{ env.FACTORY_KIT }}/factory/ledger.sh).
@@ -140,7 +151,7 @@ jobs:
         run: bash ${{ env.FACTORY_KIT }}/factory/ledger.sh record decompose "$SPEC"
 
       # A question (wait:decision) ends here with no PR. Otherwise commit the acceptance tests on
-      # factory/spec-<S>, open the spec PR (label spec-pr) and dispatch Odin, who reviews it, merges
+      # factory/spec-<S>, open the spec PR and dispatch Odin, who reviews it, merges
       # it and labels the tickets state:ready. Decomposed mode takes state:ready off first.
       - name: Open the spec PR and hand it to Odin
         if: steps.state.outputs.mode == 'new' || steps.state.outputs.mode == 'decomposed'

@@ -1,6 +1,6 @@
 # Factory task: Odin (spec #249 "Odin", docs/adr/0001-software-factory.md)
 #
-# Decompose opens the spec PR (head factory/spec-<S>, label spec-pr: each ticket's acceptance tests
+# Decompose opens the spec PR (head factory/spec-<S>: each ticket's acceptance tests
 # with #[ignore = "#<ticket>"]) and dispatches this run. Odin (Opus, ${{ env.FACTORY_KIT }}/factory/odin.md) checks
 # the tickets and tests against the code, the earlier specs' merged spec_* tests, AGENTS.md, the ADRs
 # and the glossary, fixes what it can (test files, ticket bodies, the todo!("#<ticket>") stubs that make
@@ -41,7 +41,6 @@ on:
         type: string
         required: false
         description: 'review: review the spec PR (default); conflict: only merge main in and resolve (#359)'
-        options: [review, conflict]
 
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
@@ -199,10 +198,8 @@ jobs:
 
         run: ${{ env.FACTORY_SETUP || 'true' }}
 
-      - if: env.FACTORY_CACHE == 'rust'
-
+      - if: env.FACTORY_CACHE == 'rust' && steps.pr.outputs.go == 'true'
         uses: Swatinem/rust-cache@v2
-        if: steps.pr.outputs.go == 'true'
 
       # The action's own installer is a shell script that refuses Windows, so install
       # the native Windows build and hand the action its path.
@@ -256,6 +253,7 @@ jobs:
         id: resolved
         if: steps.pr.outputs.conflict == 'true'
         run: |
+          # shellcheck disable=SC2046 # one path per line, split on purpose
           if [ -n "$(git diff --name-only --diff-filter=U)" ] || { [ -s .factory/conflict-files ] && git grep -qE '^(<<<<<<<|>>>>>>>) ' -- $(cat .factory/conflict-files); }; then
             echo "::error::conflicts left: $(git diff --name-only --diff-filter=U | tr '\n' ' ')"
             echo "ok=false" >> "$GITHUB_OUTPUT"

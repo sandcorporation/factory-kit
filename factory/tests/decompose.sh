@@ -3,7 +3,7 @@
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 script="$here/../decompose.sh"
-workflow="$here/../../workflows/factory-decompose.yml"
+workflow="$here/../../.github/workflows/factory-decompose.yml"
 export PATH="$here/decompose-fake:$here/fake:$PATH"
 export REPO=owner/repo
 
@@ -364,17 +364,12 @@ has warning "could not write the budget line" "$(cat "$tmp/log")"
 
 # --- workflow wiring -----------------------------------------------------------------------
 
-# The kit does not ship factory-decompose.yml yet (the reusable workflows are the next step), so these two
-# checks run only where the file exists and say they were skipped otherwise.
-if [ -f "$workflow" ]; then
-  current="workflow: the agent runs only in new and decomposed mode"
-  cond=$(awk '/- name: Decompose$/ { f = 1 } f && /if:/ { print; exit }' "$workflow")
-  has "agent condition" "steps.state.outputs.mode == 'new' || steps.state.outputs.mode == 'decomposed'" "$cond"
-  current="workflow: the old approve-and-start step is gone"
-  eq "approve step" 0 "$(grep -c 'Approve tickets and start the chain' "$workflow" || true)"
-else
-  echo "  SKIP workflow wiring: no $(basename "$workflow") in the kit yet (reusable workflow step)"
-fi
+[ -f "$workflow" ] || bad "workflow file missing: $workflow"
+current="workflow: the agent runs only in new and decomposed mode"
+cond=$(awk '/- name: Decompose$/ { f = 1 } f && /if:/ { print; exit }' "$workflow")
+has "agent condition" "steps.state.outputs.mode == 'new' || steps.state.outputs.mode == 'decomposed'" "$cond"
+current="workflow: the old approve-and-start step is gone"
+eq "approve step" 0 "$(grep -c 'Approve tickets and start the chain' "$workflow" || true)"
 
 echo "decompose.sh: $passes passed, $fails failed"
 [ "$fails" -eq 0 ]

@@ -203,10 +203,8 @@ jobs:
 
         run: ${{ env.FACTORY_SETUP || 'true' }}
 
-      - if: env.FACTORY_CACHE == 'rust'
-
+      - if: env.FACTORY_CACHE == 'rust' && steps.base.outputs.ci == 'run'
         uses: Swatinem/rust-cache@v2
-        if: steps.base.outputs.ci == 'run'
 
       - name: Automated checks
         id: ci
@@ -221,8 +219,9 @@ jobs:
         if: steps.ci.outcome == 'success'
         env:
           BRANCH: ${{ steps.pr.outputs.branch }}
-        bash "$FACTORY_KIT/factory/app-git.sh"
-        run: git push --force-with-lease="$BRANCH" origin "$BRANCH"
+        run: |
+          bash "$FACTORY_KIT/factory/app-git.sh"
+          git push --force-with-lease="$BRANCH" origin "$BRANCH"
 
       - name: Install Claude Code
         id: claude
