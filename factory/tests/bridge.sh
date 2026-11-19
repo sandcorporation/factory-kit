@@ -535,7 +535,7 @@ issue 301 open state:human "티켓 하나"
 labeled 301 state:human 2026-11-18T01:00:00Z
 unset FACTORY_REPO
 git init -q "$tmp/copy" && git -C "$tmp/copy" remote add origin https://github.com/acme/widget.git
-cp "$script" "$tmp/copy/bridge.sh"
+cp "$script" "$tmp/copy/bridge.sh" && cp -r "$(dirname "$script")/lib" "$tmp/copy/"
 ( cd "$tmp" && bash "$tmp/copy/bridge.sh" > "$tmp/log" 2>&1; echo $? > "$tmp/code" )
 eq code 0 "$(code)"
 eq task widget-factory "$(arg 0 --task)"
@@ -548,7 +548,7 @@ has "ssh remote too" "repos/acme/gadget/issues" "$(cat "$FAKE_GH/calls.log")"
 setup "without FACTORY_REPO or a GitHub origin the bridge stops with exit 2 (#437)"
 unset FACTORY_REPO
 mkdir -p "$tmp/bare"
-cp "$script" "$tmp/bare/bridge.sh"
+cp "$script" "$tmp/bare/bridge.sh" && cp -r "$(dirname "$script")/lib" "$tmp/bare/"
 ( cd "$tmp/bare" && GIT_CEILING_DIRECTORIES="$tmp" bash "$tmp/bare/bridge.sh" > "$tmp/log" 2>&1; echo $? > "$tmp/code" )
 eq code 2 "$(code)"
 has reason "FACTORY_REPO" "$(cat "$tmp/log")"

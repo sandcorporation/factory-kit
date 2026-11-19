@@ -189,7 +189,7 @@ eq "open tickets approved" "61 62 63" "$(approved)"
 # #61 is blocked (an open blocker); #62 is the lowest-numbered unblocked ticket.
 eq "first dispatch" 62 "$(dispatched)"
 has "report on the PR" "이름 불일치 하나를 고쳤다" "$(pr_comments)"
-eq "spec untouched" spec "$(labels_of 50)"
+eq "spec untouched" kind:spec "$(labels_of 50)"
 # The merge happens before any ticket is approved.
 merge_line=$(grep -n '/merge' "$FAKE_GH/calls.log" | head -n 1 | cut -d: -f1)
 label_line=$(grep -n 'labels\[\]=state:ready' "$FAKE_GH/calls.log" | head -n 1 | cut -d: -f1)
@@ -262,7 +262,7 @@ setup human
 printf '### cargo clippy 실패\nerror: unused variable\n' > "$tmp/reason.md"
 bash "$odin" human 50 70 "$tmp/reason.md" > /dev/null 2>&1
 eq "exit" 0 "$?"
-eq "spec to a human" "state:human,kind:spec" "$(labels_of 50)"
+eq "spec to a human" "kind:spec,state:human" "$(labels_of 50)"
 has "human marker" "<!-- factory-human spec-merge-failed -->" "$(spec_comments)"
 has "reason on the spec" "error: unused variable" "$(spec_comments)"
 has "reason on the PR" "error: unused variable" "$(pr_comments)"
@@ -296,7 +296,7 @@ eq "round counted on the PR" 1 "$(conflict_comments)"
 has "files on the PR" "crates/facet-core/src/command.rs" "$(pr_comments)"
 has "round of limit" "풀기 1/2" "$(pr_comments)"
 eq "no dispatch without --dispatch" 0 "$(odin_dispatches)"
-eq "spec untouched" spec "$(labels_of 50)"
+eq "spec untouched" kind:spec "$(labels_of 50)"
 
 setup conflict-resolved-then-merged
 # The checkout conflicts, the agent resolves, the checks pass: the merge goes through.
@@ -308,7 +308,7 @@ eq "pass exit" 0 "$?"
 eq "merged" true "$(merged)"
 eq "open tickets approved" "61 62 63" "$(approved)"
 eq "first dispatch" 62 "$(dispatched)"
-eq "no human" spec "$(labels_of 50)"
+eq "no human" kind:spec "$(labels_of 50)"
 
 setup conflict-merge-fails-dispatches-a-round
 # The squash merge fails (main moved again): the next round runs as a new Odin run in conflict mode.
@@ -326,7 +326,7 @@ has "same spec" "inputs[spec]=50" "$(grep 'factory-odin.yml/dispatches' "$FAKE_G
 rm "$FAKE_GH/fail-merge"
 bash "$odin" pass 50 70 > /dev/null 2>&1
 eq "merged on the next round" true "$(merged)"
-eq "no human" spec "$(labels_of 50)"
+eq "no human" kind:spec "$(labels_of 50)"
 
 setup conflict-limit-goes-to-a-human
 # Every merge attempt fails: two rounds, then a human with the conflicting files.
@@ -347,7 +347,7 @@ eq "no third dispatch" 2 "$(odin_dispatches)"
 has "limit in the reason" "한도(2회)" "$(cat "$tmp/reason.md")"
 has "files in the reason" "crates/facet-app/src/text.rs" "$(cat "$tmp/reason.md")"
 bash "$odin" human 50 70 "$tmp/reason.md" > /dev/null 2>&1
-eq "spec to a human" "state:human,kind:spec" "$(labels_of 50)"
+eq "spec to a human" "kind:spec,state:human" "$(labels_of 50)"
 has "files on the spec" "crates/facet-core/src/command.rs" "$(spec_comments)"
 eq "not merged" false "$(merged)"
 eq "no ticket approved" "" "$(approved)"

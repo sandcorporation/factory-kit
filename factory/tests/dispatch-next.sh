@@ -143,7 +143,7 @@ marked() {
 decomposed() { grep '^workflow run factory-decompose.yml' "$FAKE_GH/calls.log" | sed 's/.*issue=//' | tr '\n' ' ' | sed 's/ $//'; }
 
 setup "a spec that is not the last of the queue starts without a marker"
-spec 50 spec; ledger; spec 60 ""; spec 61 ""
+spec 50 kind:spec; ledger; spec 60 ""; spec 61 ""
 FACTORY_SPEC_QUEUE="60 61" run
 eq code 0 "$(code)"
 eq "decompose" 60 "$(decomposed)"
@@ -151,7 +151,7 @@ eq "labelled" true "$(jq 'any(.labels[]; .name == "kind:spec")' "$FAKE_GH/issue-
 eq "no marker" "" "$(marked '<!-- factory-')"
 
 setup "the last spec of the queue starts: queue-empty once"
-spec 50 spec; ledger; spec 60 spec; spec 61 ""; spec 62 "" closed
+spec 50 kind:spec; ledger; spec 60 kind:spec; spec 61 ""; spec 62 "" closed
 FACTORY_SPEC_QUEUE="60 61 62" run
 eq code 0 "$(code)"
 eq "decompose" 61 "$(decomposed)"
@@ -170,14 +170,14 @@ eq "a new queue" "<!-- factory-idle 60-61-62 --> <!-- factory-idle 60-61 -->" "$
 eq "queue-empty not again" "<!-- factory-queue-empty 61 -->" "$(marked '<!-- factory-queue-empty')"
 
 setup "a deferred spec in the queue is not started (#437)"
-spec 50 spec; ledger; spec 60 "state:deferred"; spec 61 ""
+spec 50 kind:spec; ledger; spec 60 "state:deferred"; spec 61 ""
 FACTORY_SPEC_QUEUE="60 61" run
 eq code 0 "$(code)"
 eq "decompose skips the deferred spec" 61 "$(decomposed)"
 eq "#60 not labelled" false "$(jq 'any(.labels[]; .name == "kind:spec")' "$FAKE_GH/issue-60.json" | tr -d '')"
 
 setup "a closed ticket the search still lists is not running"
-spec 50 spec; ledger; spec 60 spec closed
+spec 50 kind:spec; ledger; spec 60 kind:spec closed
 jq '.state = "closed"' "$FAKE_GH/issue-50.json" | tr -d '\r' > "$FAKE_GH/i" && mv "$FAKE_GH/i" "$FAKE_GH/issue-50.json"
 issue 70 state:running; jq '.state = "closed"' "$FAKE_GH/issue-70.json" | tr -d '\r' > "$FAKE_GH/i" && mv "$FAKE_GH/i" "$FAKE_GH/issue-70.json"
 echo 70 > "$FAKE_GH/list-stale-state:running"
@@ -186,7 +186,7 @@ eq code 0 "$(code)"
 eq "idle although the search lags" "<!-- factory-idle 60 -->" "$(marked '<!-- factory-idle')"
 
 setup "a --tickets-only run leaves the idle marker once per queue"
-spec 50 spec; ledger; spec 60 spec closed
+spec 50 kind:spec; ledger; spec 60 kind:spec closed
 jq '.state = "closed"' "$FAKE_GH/issue-50.json" | tr -d '\r' > "$FAKE_GH/i" && mv "$FAKE_GH/i" "$FAKE_GH/issue-50.json"
 FACTORY_SPEC_QUEUE="60" run --tickets-only
 eq code 0 "$(code)"
@@ -195,14 +195,14 @@ FACTORY_SPEC_QUEUE="60" run --tickets-only
 eq "not again" "<!-- factory-idle 60 -->" "$(marked '<!-- factory-idle')"
 
 setup "a --tickets-only run is not idle while a spec or a ticket is open"
-spec 50 spec; ledger; issue 71 state:running
+spec 50 kind:spec; ledger; issue 71 state:running
 FACTORY_SPEC_QUEUE="60" run --tickets-only
 eq code 0 "$(code)"
 eq "no idle" "" "$(marked '<!-- factory-idle')"
 eq "no decompose" "" "$(decomposed)"
 
 setup "a ticket blocked by a person's issue leaves the stalled marker once a day"
-spec 50 spec; ledger; issue 72 state:ready 1; issue 73 state:human
+spec 50 kind:spec; ledger; issue 72 state:ready 1; issue 73 state:human
 echo '[73]' > "$FAKE_GH/blocked-by-72.json"
 FACTORY_NOW=1795050000 run --tickets-only --candidates "72"
 eq code 0 "$(code)"
@@ -212,13 +212,13 @@ FACTORY_NOW=1795050600 run --tickets-only --candidates "72"
 eq "once a day" "<!-- factory-stalled 2026-11-19 -->" "$(marked '<!-- factory-stalled')"
 
 setup "an empty queue is idle as none"
-spec 50 spec; ledger
+spec 50 kind:spec; ledger
 run
 eq code 0 "$(code)"
 eq "idle none" "<!-- factory-idle none -->" "$(marked '<!-- factory-')"
 
 setup "a queue-empty marker already there is not left again"
-spec 50 spec; ledger; spec 61 ""
+spec 50 kind:spec; ledger; spec 61 ""
 jq -n '[{id: 1, created_at: "2026-11-17T01:00:00Z", body: "<!-- factory-queue-empty 61 -->\n앞서 남김"}]' \
   | tr -d '\r' > "$FAKE_GH/comments-900.json"
 FACTORY_SPEC_QUEUE="61" run
@@ -226,7 +226,7 @@ eq "decompose" 61 "$(decomposed)"
 eq "one marker" "<!-- factory-queue-empty 61 -->" "$(marked '<!-- factory-')"
 
 setup "a failed comment does not change the exit code"
-spec 50 spec; ledger; spec 61 ""
+spec 50 kind:spec; ledger; spec 61 ""
 touch "$FAKE_GH/fail-comments"
 FACTORY_SPEC_QUEUE="61" run
 eq code 0 "$(code)"
@@ -239,7 +239,7 @@ has "warns" "could not leave <!-- factory-idle 61 -->" "$(log)"
 eq "no marker" "" "$(marked '<!-- factory-')"
 
 setup "no ledger issue only warns"
-spec 50 spec
+spec 50 kind:spec
 run
 eq code 0 "$(code)"
 has "warns" "no open kind:ledger issue" "$(log)"
@@ -380,7 +380,7 @@ eq "track 1" 1 "$(tracks_of)"
 # --- deferred (#437) -------------------------------------------------------------------------
 
 setup "a deferred blocker is not a person's blocker; said once per pair"
-spec 50 spec; ledger; issue 72 state:ready 1; issue 73 state:human,state:deferred
+spec 50 kind:spec; ledger; issue 72 state:ready 1; issue 73 state:human,state:deferred
 echo '[73]' > "$FAKE_GH/blocked-by-72.json"
 FACTORY_NOW=1795050000 run --tickets-only --candidates "72"
 eq code 0 "$(code)"
@@ -391,7 +391,7 @@ FACTORY_NOW=1795140000 run --tickets-only --candidates "72"
 eq "not again the next day" "<!-- factory-stalled deferred-73-72 -->" "$(marked '<!-- factory-stalled')"
 
 setup "a person's blocker and a deferred one: the daily marker names the person's only"
-spec 50 spec; ledger; issue 72 state:ready 2; issue 73 state:human; issue 74 deferred
+spec 50 kind:spec; ledger; issue 72 state:ready 2; issue 73 state:human; issue 74 state:deferred
 echo '[73, 74]' > "$FAKE_GH/blocked-by-72.json"
 FACTORY_NOW=1795050000 run --tickets-only --candidates "72"
 eq "both markers" "<!-- factory-stalled deferred-74-72 --> <!-- factory-stalled 2026-11-19 -->" "$(marked '<!-- factory-stalled')"
@@ -404,18 +404,18 @@ subs() { printf '%s' "$2" > "$FAKE_GH/sub-issues-$1.json"; }
 closed_comment() { grep '^issue close 50 ' "$FAKE_GH/calls.log" | sed 's/.*--comment //'; }
 
 setup "a spec whose only open tickets are deferred closes, naming them"
-ledger; spec 50 spec
+ledger; spec 50 kind:spec
 jq '.sub_issues_summary = {total: 4, completed: 2}' "$FAKE_GH/issue-50.json" | tr -d '\r' > "$FAKE_GH/x" && mv "$FAKE_GH/x" "$FAKE_GH/issue-50.json"
-subs 50 '[{"number": 61, "state": "closed", "labels": []}, {"number": 62, "state": "open", "labels": [{"name": "deferred"}]},
-  {"number": 63, "state": "closed", "labels": []}, {"number": 64, "state": "open", "labels": [{"name": "deferred"}, {"name": "state:human"}]}]'
+subs 50 '[{"number": 61, "state": "closed", "labels": []}, {"number": 62, "state": "open", "labels": [{"name": "state:deferred"}]},
+  {"number": 63, "state": "closed", "labels": []}, {"number": 64, "state": "open", "labels": [{"name": "state:deferred"}, {"name": "state:human"}]}]'
 FACTORY_SPEC_QUEUE="" run
 eq code 0 "$(code)"
 eq "closed" "closed" "$(jq -r .state "$FAKE_GH/issue-50.json" | tr -d '\r')"
 has "names the deferred" "Deferred, left open: #62 #64." "$(closed_comment)"
 
 setup "a spec with an open ticket that is not deferred stays open"
-ledger; spec 50 spec; issue 62 state:ready
-subs 50 '[{"number": 61, "state": "open", "labels": [{"name": "deferred"}]}, {"number": 62, "state": "open", "labels": [{"name": "state:ready"}]}]'
+ledger; spec 50 kind:spec; issue 62 state:ready
+subs 50 '[{"number": 61, "state": "open", "labels": [{"name": "state:deferred"}]}, {"number": 62, "state": "open", "labels": [{"name": "state:ready"}]}]'
 FACTORY_SPEC_QUEUE="" run
 eq code 0 "$(code)"
 eq "not closed" "" "$(closed_comment)"

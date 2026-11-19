@@ -313,7 +313,7 @@ eq "reason" daily "$(out reason)"
 bash "$ledger" guard 2 > /dev/null
 eq "every spec stops" false "$(out go)"
 eq "one daily marker" 1 "$(comment_count 900 '<!-- factory-budget-daily 2026-11-17 -->')"
-eq "no spec pause" "spec" "$(labels_of 1)"
+eq "no spec pause" "kind:spec" "$(labels_of 1)"
 FACTORY_NOW=1794927600 bash "$ledger" guard 1 > /dev/null # 11-18 00:00 KST
 eq "next KST day" true "$(out go)"
 

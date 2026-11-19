@@ -61,7 +61,7 @@ setup "a local ticket a person deferred stays out of the factory and is not hand
 issue 85 kind:local,state:deferred "코드 서명 인증서" "인증서와 비밀값을 사람이 준비한다"
 bash "$script" 85 > /dev/null 2>&1; eq "exit" 0 $?
 eq "local" true "$(res)"
-eq "labels" "state:deferred,kind:local" "$(labels 85)"
+eq "labels" "kind:local,state:deferred" "$(labels 85)"
 eq "no comment" 0 "$(ncomments 85)"
 eq "hand-to-human not called" 0 "$(grep -c 'issues/85/labels' "$FAKE_GH/calls.log")"
 
@@ -71,7 +71,7 @@ jq -n '[{id: 1, created_at: "2026-11-17T00:00:00Z", body: "<!-- factory-human lo
   | tr -d '\r' > "$FAKE_GH/comments-86.json"
 bash "$script" 86 > /dev/null 2>&1; eq "exit" 0 $?
 eq "local" true "$(res)"
-eq "labels" "local" "$(labels 86)"
+eq "labels" "kind:local" "$(labels 86)"
 eq "still one comment" 1 "$(ncomments 86)"
 
 setup "an ordinary ticket is left alone"
