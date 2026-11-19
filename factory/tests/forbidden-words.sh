@@ -21,7 +21,7 @@ done < "$list"
 # The checker must catch what it is meant to catch.
 probe=$(mktemp)
 trap 'rm -f "$probe"' EXIT
-printf 'ok line\nhost: build-1.example.ts.net\n' > "$probe"
+printf 'ok line\nhost: build-1.example.ts''.net\n' > "$probe"
 hit=0
 for p in "${patterns[@]}"; do grep -qiE -- "$p" "$probe" && hit=1; done
 [ "$hit" -eq 1 ] || { echo "  FAIL the patterns miss a planted internal host name"; fails=$((fails + 1)); }

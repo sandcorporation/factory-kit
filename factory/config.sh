@@ -26,6 +26,7 @@ runners.verify|@runners.default
 setup|
 checks.full|
 checks.kill|
+checks.quick|
 git.name|factory[bot]
 git.email|41898282+github-actions[bot]@users.noreply.github.com
 models.default|claude-sonnet-5-5

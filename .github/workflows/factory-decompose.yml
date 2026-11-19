@@ -1,0 +1,147 @@
+# Factory task: Decompose (docs/adr/0001-software-factory.md, spec #249 "Decompose")
+# Splits a spec issue into tracer-bullet tickets and writes each ticket's acceptance tests
+# (#[ignore = "#<ticket>"]) into a spec PR for Odin, or asks a question (wait:decision).
+# Trigger: the `spec` label, or a manual run with the spec issue number.
+name: factory-decompose
+
+on:
+  workflow_call:
+    inputs:
+      kit-repository:
+        description: owner/name of the factory kit
+        type: string
+        required: true
+      kit-ref:
+        description: tag, branch or commit of the kit (pin a tag or a commit)
+        type: string
+        required: true
+      issue:
+        type: string
+        required: false
+        description: Spec issue number to decompose
+
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      FACTORY_APP_ID:
+        required: true
+      FACTORY_APP_PRIVATE_KEY:
+        required: true
+
+concurrency:
+  group: factory-decompose-${{ github.event.issue.number || inputs.issue }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+  id-token: write
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.cfg.outputs.runners_default }}
+      implement: ${{ steps.cfg.outputs.runners_implement }}
+      verify: ${{ steps.cfg.outputs.runners_verify }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/factory.yml
+          sparse-checkout-cone-mode: false
+      - name: Factory kit and settings
+        id: cfg
+        shell: bash
+        env:
+          KIT: ${{ inputs.kit-repository }}
+          KIT_REF: ${{ inputs.kit-ref }}
+        run: |
+          d="$RUNNER_TEMP/factory-kit"
+          git init -q "$d" && git -C "$d" fetch -q --depth 1 "https://github.com/$KIT" "$KIT_REF" && git -C "$d" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          echo "FACTORY_KIT=$d" >> "$GITHUB_ENV"
+          bash "$d/factory/config.sh"
+
+  decompose:
+    needs: config
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'kind:spec'
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 60
+    env:
+      SPEC: ${{ github.event.issue.number || inputs.issue }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      BASE: ${{ github.event.repository.default_branch }}
+      FACTORY_SPEC_BUDGET_USD: ${{ vars.FACTORY_SPEC_BUDGET_USD }}
+      FACTORY_DAILY_BUDGET_USD: ${{ vars.FACTORY_DAILY_BUDGET_USD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Factory kit and settings
+        id: cfg
+        shell: bash
+        env:
+          KIT: ${{ inputs.kit-repository }}
+          KIT_REF: ${{ inputs.kit-ref }}
+        run: |
+          d="$RUNNER_TEMP/factory-kit"
+          git init -q "$d" && git -C "$d" fetch -q --depth 1 "https://github.com/$KIT" "$KIT_REF" && git -C "$d" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          echo "FACTORY_KIT=$d" >> "$GITHUB_ENV"
+          bash "$d/factory/config.sh"
+
+      # Spec #249 "비용 장부와 상한": stop on wait:decision / wait:budget and on the
+      # spec and daily budgets (${{ env.FACTORY_KIT }}/factory/ledger.sh).
+      - name: Budget guard
+        id: budget
+        run: bash ${{ env.FACTORY_KIT }}/factory/ledger.sh guard "$SPEC"
+
+      # new (no sub-issues) / decomposed (open tickets without #[ignore = "#N"] on main) /
+      # specpr (an open spec PR: Odin only) / done / question (${{ env.FACTORY_KIT }}/factory/decompose.sh).
+      - name: Decide the mode
+        id: state
+        if: steps.budget.outputs.go == 'true'
+        run: bash ${{ env.FACTORY_KIT }}/factory/decompose.sh state "$SPEC"
+
+      - name: Hand the open spec PR to Odin
+        if: steps.state.outputs.mode == 'specpr'
+        run: bash ${{ env.FACTORY_KIT }}/factory/decompose.sh dispatch-odin "$SPEC"
+
+      - name: Nothing to do
+        if: steps.state.outputs.mode == 'done' || steps.state.outputs.mode == 'question'
+        run: echo "::notice::#$SPEC is ${{ steps.state.outputs.mode }}; no Decompose run"
+
+      # The agent formats the test files with rustfmt; install the toolchain rust-toolchain.toml pins.
+      - name: Prepare rustfmt
+        if: steps.state.outputs.mode == 'new' || steps.state.outputs.mode == 'decomposed'
+        continue-on-error: true
+        run: ${{ env.FACTORY_SETUP || 'true' }}
+
+      - name: Decompose
+        if: steps.state.outputs.mode == 'new' || steps.state.outputs.mode == 'decomposed'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # The Implementer chain and the resume job dispatch this run with GITHUB_TOKEN, so the actor is the github-actions bot.
+          allowed_bots: github-actions
+          prompt: |
+            You are the Decompose run of this repo's software factory.
+            Spec issue: #${{ env.SPEC }} in ${{ github.repository }}.
+            Mode: ${{ steps.state.outputs.mode }}
+            Open tickets without acceptance tests (decomposed mode): ${{ steps.state.outputs.tickets }}
+            Read ${{ env.FACTORY_KIT }}/factory/decompose.md and follow it exactly.
+          claude_args: >-
+            --model ${{ env.FACTORY_MODELS_DECOMPOSE }}
+            --max-turns ${{ env.FACTORY_TURNS_DECOMPOSE }}
+            --allowedTools "Bash(gh:*),Bash(rustfmt:*),Bash(git status:*),Bash(git diff:*),Read,Write,Edit,Glob,Grep"
+
+      - name: Record cost
+        if: always() && (steps.state.outputs.mode == 'new' || steps.state.outputs.mode == 'decomposed')
+        run: bash ${{ env.FACTORY_KIT }}/factory/ledger.sh record decompose "$SPEC"
+
+      # A question (wait:decision) ends here with no PR. Otherwise commit the acceptance tests on
+      # factory/spec-<S>, open the spec PR (label spec-pr) and dispatch Odin, who reviews it, merges
+      # it and labels the tickets state:ready. Decomposed mode takes state:ready off first.
+      - name: Open the spec PR and hand it to Odin
+        if: steps.state.outputs.mode == 'new' || steps.state.outputs.mode == 'decomposed'
+        run: bash ${{ env.FACTORY_KIT }}/factory/decompose.sh finish "$SPEC" "${{ steps.state.outputs.mode }}"
