@@ -159,7 +159,7 @@ finish() {
   if [ "$mode" = decomposed ]; then
     for n in $tickets; do
       if has_label "$n" "${L_READY}"; then
-        gh api -X DELETE "repos/$REPO/issues/$n/labels/state:ready" > /dev/null \
+        gh api -X DELETE "repos/$REPO/issues/$n/labels/${L_READY}" > /dev/null \
           || echo "::warning::could not remove ${L_READY} from #$n"
       fi
     done

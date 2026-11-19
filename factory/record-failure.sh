@@ -45,7 +45,7 @@ since_reset() {
 bodies=$(since_reset) || { echo "::warning::record-failure: could not read the comments of #$n"; bodies='[]'; }
 blocked=$(printf '%s' "$bodies" | jq -r --arg b "$BLOCKED" '[.[] | select(startswith($b))] | last // empty' | tr -d '\r')
 if [ -n "$blocked" ]; then
-  gh api -X DELETE "repos/$REPO/issues/$n/labels/state:running" > /dev/null 2>&1 || true
+  gh api -X DELETE "repos/$REPO/issues/$n/labels/${L_RUNNING}" > /dev/null 2>&1 || true
   bash "$here/hand-to-human.sh" "$n" agent-blocked "Implementer가 막힘을 알렸다($url). 사람이 아래를 정한 뒤 티켓을 공장에 돌려준다.
 
 ${blocked#"$BLOCKED"}"
@@ -57,7 +57,7 @@ if [ -n "$started" ]; then
     | jq -rs --arg t "$started" "$BOT"' [.[][] | select(.created_at >= $t and bot and (.body | startswith("<!--") | not)) | .body] | last // empty' \
     | tr -d '\r') || said=
   if [ -n "$said" ]; then
-    gh api -X DELETE "repos/$REPO/issues/$n/labels/state:running" > /dev/null 2>&1 || true
+    gh api -X DELETE "repos/$REPO/issues/$n/labels/${L_RUNNING}" > /dev/null 2>&1 || true
     bash "$here/hand-to-human.sh" "$n" agent-blocked "Implementer가 커밋 없이 멈추며 까닭을 남겼다($url). 사람이 아래를 정한 뒤 티켓을 공장에 돌려준다.
 
 $said"
@@ -71,7 +71,7 @@ Implementer run failed ($what): $url${FAILURE_REASON:+
 $FAILURE_REASON}" > /dev/null \
   || echo "::warning::record-failure: could not comment on #$n"
 fails=$(since_reset | jq --arg m "$marker" '[.[] | select(contains($m))] | length' | tr -d '\r') || fails=1
-gh api -X DELETE "repos/$REPO/issues/$n/labels/state:running" > /dev/null 2>&1 || true
+gh api -X DELETE "repos/$REPO/issues/$n/labels/${L_RUNNING}" > /dev/null 2>&1 || true
 if [ "${fails:-0}" -ge "$limit" ]; then
   # The code of the hand-over (#437): the last failure ended on a conflict merge-check.sh found unresolved
   # (the factory's own merge in Finish merge / Require main merged ran first, #434) → conflict.
