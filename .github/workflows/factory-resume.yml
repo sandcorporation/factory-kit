@@ -1,0 +1,99 @@
+# Factory task: Resume (docs/adr/0001-software-factory.md, spec #249 "재개")
+# When a person removes `wait:decision` or `wait:budget` from a spec issue, decide the stage the
+# spec stopped at and dispatch it (Decompose, Odin, Verify or the next ticket; ${{ env.FACTORY_KIT }}/factory/resume.sh).
+# Trigger: the label removal, or a manual run with the spec issue number.
+name: factory-resume
+
+on:
+  workflow_call:
+    inputs:
+      kit-repository:
+        description: owner/name of the factory kit
+        type: string
+        required: true
+      kit-ref:
+        description: tag, branch or commit of the kit (pin a tag or a commit)
+        type: string
+        required: true
+      spec:
+        type: string
+        required: false
+        description: Spec issue number to resume
+
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      FACTORY_APP_ID:
+        required: true
+      FACTORY_APP_PRIVATE_KEY:
+        required: true
+
+concurrency:
+  group: factory-resume-${{ github.event.issue.number || inputs.spec }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+  actions: write
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.cfg.outputs.runners_default }}
+      implement: ${{ steps.cfg.outputs.runners_implement }}
+      verify: ${{ steps.cfg.outputs.runners_verify }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/factory.yml
+          sparse-checkout-cone-mode: false
+      - name: Factory kit and settings
+        id: cfg
+        shell: bash
+        env:
+          KIT: ${{ inputs.kit-repository }}
+          KIT_REF: ${{ inputs.kit-ref }}
+        run: |
+          d="$RUNNER_TEMP/factory-kit"
+          git init -q "$d" && git -C "$d" fetch -q --depth 1 "https://github.com/$KIT" "$KIT_REF" && git -C "$d" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          echo "FACTORY_KIT=$d" >> "$GITHUB_ENV"
+          bash "$d/factory/config.sh"
+
+  resume:
+    needs: config
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'unlabeled' &&
+       (github.event.label.name == 'wait:decision' || github.event.label.name == 'wait:budget') &&
+       contains(github.event.issue.labels.*.name, 'kind:spec'))
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 10
+    env:
+      SPEC: ${{ github.event.issue.number || inputs.spec }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      BASE: ${{ github.event.repository.default_branch }}
+      FACTORY_SPEC_BUDGET_USD: ${{ vars.FACTORY_SPEC_BUDGET_USD }}
+      FACTORY_DAILY_BUDGET_USD: ${{ vars.FACTORY_DAILY_BUDGET_USD }}
+      FACTORY_TRACKS: ${{ vars.FACTORY_TRACKS }}
+      FACTORY_SPEC_QUEUE: ${{ vars.FACTORY_SPEC_QUEUE }}
+    steps:
+      # decompose.sh state looks for the acceptance tests (#[ignore = "#N"]) in the checkout of main.
+      - uses: actions/checkout@v4
+      - name: Factory kit and settings
+        id: cfg
+        shell: bash
+        env:
+          KIT: ${{ inputs.kit-repository }}
+          KIT_REF: ${{ inputs.kit-ref }}
+        run: |
+          d="$RUNNER_TEMP/factory-kit"
+          git init -q "$d" && git -C "$d" fetch -q --depth 1 "https://github.com/$KIT" "$KIT_REF" && git -C "$d" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          echo "FACTORY_KIT=$d" >> "$GITHUB_ENV"
+          bash "$d/factory/config.sh"
+
+      - name: Resume the stopped stage
+        run: bash ${{ env.FACTORY_KIT }}/factory/resume.sh "$SPEC"
