@@ -268,6 +268,26 @@ case "$method $path" in
     jqf --slurpfile i "$src" '. + [{number: $i[0].number, id: ($i[0].id // (100000 + $i[0].number))}]' "$f" \
       > "$f.new" && mv "$f.new" "$f"
     echo '{}'; exit 0 ;;
+  # merge-pr.sh: check-runs.json ({check_runs: [{name, status, conclusion}]}, default none; with
+  # check-runs-from holding N they show only from the N-th read on: checks registered late),
+  # status.json ({statuses: [{context, state}]}, default none), rules.json (the rulesets' rules of the
+  # branch, default []; fail-rules: 403), protection.json (branch protection; without it the call fails with 404,
+  # with fail-protection it fails with 403).
+  "GET repos/"*/*/commits/*/check-runs)
+    c=$(( $(cat "$d/check-runs-calls" 2>/dev/null || echo 0) + 1 )); echo "$c" > "$d/check-runs-calls"
+    if [ -f "$d/check-runs.json" ] && [ "$c" -ge "$(cat "$d/check-runs-from" 2>/dev/null || echo 1)" ]; then
+      cat "$d/check-runs.json"
+    else echo '{"check_runs": []}'; fi
+    exit 0 ;;
+  "GET repos/"*/*/commits/*/status)
+    if [ -f "$d/status.json" ]; then cat "$d/status.json"; else echo '{"statuses": []}'; fi; exit 0 ;;
+  "GET repos/"*/*/rules/branches/*)
+    [ -e "$d/fail-rules" ] && fail "HTTP 403 Forbidden"
+    if [ -f "$d/rules.json" ]; then cat "$d/rules.json"; else echo '[]'; fi; exit 0 ;;
+  "GET repos/"*/*/branches/*/protection)
+    [ -e "$d/fail-protection" ] && fail "HTTP 403 Forbidden"
+    [ -f "$d/protection.json" ] || fail "HTTP 404 Branch not protected"
+    cat "$d/protection.json"; exit 0 ;;
   "PUT repos/"*/*/pulls/*/merge)
     n=${path%/merge}; n=${n##*/}
     f="$d/pull-$n.json"
@@ -288,7 +308,8 @@ case "$method $path" in
         fail "no state or body"
       fi
     fi
-    cat "$f"; exit 0 ;;
+    # mergeable: true unless the PR file says otherwise (null: GitHub still computing it).
+    jqf 'if has("mergeable") then . else .mergeable = true end' "$f"; exit 0 ;;
   "DELETE repos/"*/*/git/refs/heads/*) echo '{}'; exit 0 ;;
   # runs.json ([{id, event, head_branch, triggering_actor: {login}, jobs, cancelled}],
   # default []; bench-gate.sh adds head_sha, status, conclusion). GET …/workflows/<f>/runs filters by the

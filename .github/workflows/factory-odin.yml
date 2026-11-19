@@ -123,6 +123,7 @@ jobs:
           bash "$d/factory/config.sh"
       - name: App token (push, pull requests, merge only)
         id: app
+        if: steps.cfg.outputs.app_enabled != 'false'
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
@@ -130,6 +131,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
       - name: Hand the App token to the push, pull request and merge commands
+        if: steps.cfg.outputs.app_enabled != 'false'
         shell: bash
         run: echo "FACTORY_APP_TOKEN=${{ steps.app.outputs.token }}" >> "$GITHUB_ENV"
 

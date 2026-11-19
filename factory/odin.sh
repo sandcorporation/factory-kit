@@ -41,7 +41,7 @@
 #
 # Environment: REPO (or GITHUB_REPOSITORY), GH_TOKEN, BASE (default main); RUN_URL (link in comments,
 # optional); FACTORY_DISPATCH_NEXT (command run instead of dispatch-next.sh, tests);
-# FACTORY_MERGE_WAIT (seconds between merge attempts, default 15); ODIN_CONFLICT_LIMIT (conflict
+# merge.timeout, merge.interval (FACTORY_MERGE_TIMEOUT, FACTORY_MERGE_INTERVAL or FACTORY_MERGE_WAIT; merge-pr.sh); ODIN_CONFLICT_LIMIT (conflict
 # rounds before a human, default 2). Needs bash, gh and jq.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
@@ -188,21 +188,14 @@ start_chain() {
 # --- pass ----------------------------------------------------------------------------------------
 
 pass() {
-  local s=$1 pr=$2 report=${3:-} attempt merged=false
+  local s=$1 pr=$2 report=${3:-}
   if [ -n "$report" ] && [ -s "$report" ]; then
     comment "$pr" "Odin$(run_link): 통과
 
 $(cat "$report")" || echo "::warning::could not comment on PR #$pr"
   fi
-  for attempt in 1 2 3 4; do
-    if GH_TOKEN="${FACTORY_APP_TOKEN:-${GH_TOKEN:-}}" gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash > /dev/null; then
-      merged=true
-      break
-    fi
-    echo "::notice::merge attempt $attempt of spec PR #$pr failed; GitHub may still be computing mergeability"
-    sleep "${FACTORY_MERGE_WAIT:-15}"
-  done
-  if ! $merged; then
+  # merge-pr.sh waits for the required checks and squash-merges with the App token.
+  if ! REPO="$REPO" bash "$here/merge-pr.sh" "$pr"; then
     echo "::error::could not merge spec PR #$pr"
     return 1
   fi

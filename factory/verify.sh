@@ -46,11 +46,10 @@
 # Environment: REPO (or GITHUB_REPOSITORY), GH_TOKEN; RUN_URL (link in comments, optional);
 # FACTORY_DISPATCH_NEXT (command run instead of dispatch-next.sh, tests); FACTORY_GUARD (command run
 # with the ticket instead of `ledger.sh guard` in next-verify, tests);
-# FACTORY_MERGE_WAIT
-# (seconds between merge attempts, default 15). Needs bash, git, gh and jq.
+# merge.timeout, merge.interval (FACTORY_MERGE_TIMEOUT, FACTORY_MERGE_INTERVAL or FACTORY_MERGE_WAIT;
+# merge-pr.sh). Needs bash, git, gh and jq.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
-glob=${FACTORY_ACCEPTANCE_GLOB:-$(bash "$here/config.sh" --default acceptance.glob)}
 . "$here/lib/labels.sh"
 REPO=${REPO:-${GITHUB_REPOSITORY:-}}
 # Every send-back comment starts with this; `kind=` follows since #307 (none: acceptance).
@@ -72,10 +71,10 @@ usage() {
 
 mech() {
   local n=$1 base=$2 attr stub problems=0 left line file
-  attr="#[ignore = \"#$n\"]"
+  attr=$(bash "$here/spec-tests.sh" text "$n")
   stub="todo!(\"#$n\")"
 
-  left=$(git grep -n -F "$attr" HEAD -- '*.rs' | sed 's/^HEAD://')
+  left=$(bash "$here/spec-tests.sh" left "$n" HEAD || true)
   if [ -n "$left" ]; then
     echo "- \`$attr\`이 남아 있다(이 티켓의 인수 시험을 모두 켜야 한다):"
     printf '%s\n' "$left" | sed 's/^/  - /'
@@ -91,7 +90,9 @@ mech() {
     problems=1
   fi
 
-  # Only deletions of this ticket's ignore lines may touch the acceptance tests.
+  # Only deletions of this ticket's markers may touch the acceptance tests (acceptance.glob, spec-tests.sh).
+  local -a globs
+  mapfile -t globs < <(bash "$here/spec-tests.sh" globs)
   file=
   while IFS= read -r line; do
     line=${line%$'\r'}
@@ -105,9 +106,9 @@ mech() {
         local body=${line#-}
         local trimmed
         trimmed=$(printf '%s' "$body" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-        if [ "$trimmed" = "$attr" ]; then
+        if bash "$here/spec-tests.sh" is-marker "$n" "$file" "$body"; then
           :
-        elif printf '%s' "$trimmed" | grep -Eq '^#\[ignore = "#[0-9]+"\]$'; then
+        elif bash "$here/spec-tests.sh" is-marker any "$file" "$body"; then
           echo "- 다른 티켓의 인수 시험을 켰다 $file: \`$trimmed\`"
           problems=1
         else
@@ -115,7 +116,7 @@ mech() {
           problems=1
         fi ;;
     esac
-  done < <(git diff --unified=0 --no-color --no-ext-diff --no-renames "$base"...HEAD -- "$glob")
+  done < <(git diff --unified=0 --no-color --no-ext-diff --no-renames "$base"...HEAD -- "${globs[@]}")
 
   if [ "$problems" -ne 0 ]; then return 1; fi
   echo "기계 검사 통과: \`$attr\`·\`$stub\` 없음, 인수 시험의 변경은 이 티켓의 ignore 줄 지우기뿐"
@@ -229,19 +230,10 @@ conflict_pr() {
 # --- pass ----------------------------------------------------------------------------------------
 
 pass() {
-  local n=$1 pr=$2 report=${3:-} branch attempt merged=false
+  local n=$1 pr=$2 report=${3:-} branch
   branch=$(pr_branch "$pr")
-  for attempt in 1 2 3 4; do
-    if GH_TOKEN="${FACTORY_APP_TOKEN:-${GH_TOKEN:-}}" gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash >/dev/null; then
-      merged=true; break
-    fi
-    echo "::notice::merge attempt $attempt of PR #$pr failed; GitHub may still be computing mergeability"
-    sleep "${FACTORY_MERGE_WAIT:-15}"
-  done
-  if ! $merged; then
-    echo "::error::could not merge PR #$pr"
-    return 1
-  fi
+  # merge-pr.sh waits for the required checks and squash-merges with the App token.
+  if ! REPO="$REPO" bash "$here/merge-pr.sh" "$pr"; then echo "::error::could not merge PR #$pr"; return 1; fi
   delete_branch "$branch"
   if [ -n "$report" ] && [ -s "$report" ]; then
     gh api "repos/$REPO/issues/$pr/comments" -f "body=Verify$(run_link): 통과

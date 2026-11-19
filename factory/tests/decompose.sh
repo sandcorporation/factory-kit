@@ -6,6 +6,7 @@ script="$here/../decompose.sh"
 workflow="$here/../../.github/workflows/factory-decompose.yml"
 export PATH="$here/decompose-fake:$here/fake:$PATH"
 export REPO=owner/repo
+export FACTORY_APP_TOKEN=test-app-token # app-git.sh (app.enabled, default true) needs one
 
 fails=0
 passes=0

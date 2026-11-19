@@ -49,7 +49,13 @@
 | `turns.odin` | `60` | Odin 검토 최대 턴 | `factory-odin.yml:289` |
 | `turns.verify` | `40` | 인수 검토 최대 턴 | `factory-verify.yml:254` |
 | `labels.scan` | `.github/` | `labels-sync.sh`가 옛 라벨 이름이 남았는지 훑을 경로 | `factory/labels-sync.sh:55-58` |
-| `acceptance.glob` | `crates/*/tests/spec_*.rs` | 인수 시험 파일의 git 경로 패턴. 분해가 커밋하는 파일, Verify가 「인수 시험을 고쳤다」를 보는 범위 | `factory/decompose.sh`, `factory/verify.sh` (`FACTORY_ACCEPTANCE_GLOB`) |
+| `acceptance.glob` | `crates/*/tests/spec_*.rs` | 인수 시험 파일의 git 경로 패턴. 공백으로 나눠 여러 개를 쓴다(`crates/*/tests/spec_*.rs web/tests/*.spec.ts`). 분해가 커밋하는 파일, Verify가 「인수 시험을 고쳤다」를 보는 범위 | `factory/spec-tests.sh:26`, `factory/decompose.sh`, `factory/verify.sh`, `factory/acceptance-probe.sh` (`FACTORY_ACCEPTANCE_GLOB`) |
+| `acceptance.marker` | `#\[ignore = "#{n}"\]` | 티켓 N이 아직 통과시키지 않은 인수 시험의 표지(확장 정규식, `{n}`이 티켓 번호). 구현이 지우고, 남아 있으면 분해·Verify가 「아직」으로 본다 | `factory/spec-tests.sh:24` (`FACTORY_ACCEPTANCE_MARKER`) |
+| `acceptance.markers` | 빈 값 | 파일마다 다른 표지. 여러 줄 블록(YAML 블록 문자열)에 한 줄에 `<glob> <정규식>`. 있으면 그 glob에 맞는 파일만 그 정규식으로 찾는다(여러 언어 저장소) | `factory/spec-tests.sh:25` (`FACTORY_ACCEPTANCE_MARKERS`) |
+| `merge.timeout` | `20` | `merge-pr.sh`가 필수 검사를 기다리는 전체 시간(분). 넘으면 종료 코드 3 | `factory/merge-pr.sh:31` (`FACTORY_MERGE_TIMEOUT`) |
+| `merge.interval` | `15` | `merge-pr.sh`의 검사 확인 간격(초) | `factory/merge-pr.sh:32` (`FACTORY_MERGE_INTERVAL`) |
+| `app.enabled` | `true` | GitHub App 토큰으로 push·PR·병합하는가. 켜짐인데 토큰(`FACTORY_APP_ID`·`FACTORY_APP_PRIVATE_KEY` 비밀)이 없으면 오류. 꺼짐이면 App 단계를 건너뛰고 `GITHUB_TOKEN`으로 하며 경고만 낸다(그 push는 CI를 띄우지 않는다) | `factory/app-git.sh:12`, workflow 4개의 `App token` 단계 (`FACTORY_APP_ENABLED`) |
+| `human_check.enabled` | `false` | 켜면 spec의 티켓이 모두 끝났을 때 spec에 `wait:check`를 붙이고 사람이 그 라벨을 뗄 때까지 닫지 않는다 | `factory/human-check.sh:19`, `factory/dispatch-next.sh:306`·`:317` (`FACTORY_HUMAN_CHECK_ENABLED`) |
 | `env.<이름>` | 없음 | 그 이름의 환경 변수 | 작업 잡 전체 (`factory/config.sh:89-92`) |
 
 표의 workflow 경로는 모두 `.github/workflows/` 아래다.
@@ -75,6 +81,34 @@
 | `FACTORY_DECOMPOSE_WORKFLOW` | `factory-decompose.yml` | `factory/dispatch-next.sh:290`·`:298`·`:341`, `factory/resume.sh:96` |
 | `FACTORY_ODIN_WORKFLOW` | `factory-odin.yml` | `factory/decompose.sh:152`, `factory/odin.sh:263` |
 | `FACTORY_VERIFY_WORKFLOW` | `factory-verify.yml` | `factory/verify.sh:285`·`:316`, `factory/resume.sh:108` |
+
+## 서비스 띄우기(`setup`에서 docker run)
+
+시험에 DB·캐시 같은 서비스가 필요하면 `setup` 셸에서 `docker run`으로 띄운다. 재사용 workflow의 `services:`는 caller가 바꿀 수 없고 식을 받지 않으므로, 저장소마다 다른 서비스는 셸이 가장 좁은 자리다. 포트를 열고 헬스 체크가 통과할 때까지 기다린 뒤 끝낸다.
+
+```yaml
+setup: |
+  docker run -d --name db -p 5432:5432 -e POSTGRES_PASSWORD=test postgres:16
+  for i in $(seq 1 30); do docker exec db pg_isready -U postgres && break; sleep 1; done
+  docker exec db pg_isready -U postgres
+env.DATABASE_URL: postgres://postgres:test@localhost:5432/postgres
+```
+
+## toolchain은 `setup` 셸로
+
+`actions/setup-python` 같은 단계는 workflow의 `uses:`에 들어가야 하는데 `uses:`는 식(`${{ }}`)을 받지 않아 설정 파일로 고를 수 없다. 언어 도구는 `setup` 셸로 설치한다.
+
+- python: `setup: pipx install uv && uv python install 3.12 && uv sync`
+- node: `setup: corepack enable && pnpm install --frozen-lockfile`
+- go: `setup: curl -sSfL https://go.dev/dl/go1.23.4.linux-amd64.tar.gz | sudo tar -C /usr/local -xz && echo /usr/local/go/bin >> "$GITHUB_PATH"`
+
+## 사람 확인(`human_check.enabled`)
+
+`dispatch-next.sh`가 spec을 닫는 두 곳(티켓이 모두 병합됨 `:306`, 남은 것이 미룬 티켓뿐 `:317`) 바로 앞에서 `factory/human-check.sh <spec>`을 부른다. 꺼져 있으면 그대로 닫는다. 켜져 있으면 처음에 `wait:check` 라벨과 표지 댓글 `<!-- factory-human-check SPEC -->`을 달고(bridge가 사람 확인 메일로 보낸다) 닫지 않는다. 사람이 확인하고 라벨을 떼면 다음 dispatch 때 spec이 닫힌다. 다른 자리에서 사람 확인을 끼우려면 그 자리에서 같은 스크립트를 불러 종료 코드 0일 때만 다음으로 간다(1: 기다림, 2: GitHub 호출 실패).
+
+## 병합(`merge-pr.sh`)
+
+Odin과 Verify는 `factory/merge-pr.sh <PR>`로 병합한다. 기준 브랜치의 필수 검사를 rulesets(`rules/branches/<base>`)와 branch protection에서 읽고(둘 다 못 읽으면 PR의 모든 검사를 기다림), 모두 초록이면 App 토큰으로 squash 병합한다. `mergeable`이 아직 null이면 다시 본다. 종료 코드: 0 병합됨, 1 사용법·읽기 실패, 2 필수 검사 실패, 3 시간 초과(`merge.timeout`), 4 닫힘·충돌.
 
 ## 알려진 한계
 

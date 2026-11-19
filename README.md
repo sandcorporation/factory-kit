@@ -54,6 +54,10 @@ caller의 `uses: …@<태그>`와 `kit-ref: <태그>`를 **같은 태그**로 �
 - rust·Windows 전제가 남아 있다: `cache`는 `rust`만 알아듣고, Odin 탐침 로그 이름이 `probe-cargo.log`이며, 분해 잡에 「Prepare rustfmt」 단계가 있고, 프로세스 정리에 `taskkill`을 쓴다.
 - 하루 경계(비용 장부·상한)는 KST 자정으로 고정돼 있다.
 - caller workflow는 `run-name`을 kit에서 복사해 와야 한다(재사용 workflow의 `run-name`은 caller에 적용되지 않는다).
+- 인수 시험의 표지 기본값은 rust `#[ignore = "#N"]`다. 다른 언어는 `acceptance.marker`·`acceptance.markers`로 바꾼다.
+- 언어 도구와 서비스는 `setup` 셸로 설치·실행한다(`uses:`·`services:`는 식을 받지 않아 설정으로 고를 수 없다, docs/config.md).
+- `app.enabled: false`면 공장의 push가 CI를 띄우지 않는다(`GITHUB_TOKEN`의 push는 workflow를 시작하지 않는다). 그래서 `merge-pr.sh`는 검사가 없는 PR에서 기다리다 시간 초과로 끝난다.
+- `human_check.enabled`의 확인 항목은 spec 하나에 한 줄이다. 무엇을 볼지는 spec 본문에 적는다.
 - 기본값의 `@키`(다른 설정 따르기)는 기본값 표에서만 해석한다. 설정 파일에 `@models.strong`처럼 쓰면 그 글자가 값이 된다.
 
 ## 시험

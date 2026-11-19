@@ -42,7 +42,13 @@ turns.decompose|120
 turns.odin|60
 turns.verify|40
 labels.scan|.github/
-acceptance.glob|crates/*/tests/spec_*.rs'
+acceptance.glob|crates/*/tests/spec_*.rs
+acceptance.marker|#\[ignore = "#{n}"\]
+acceptance.markers|
+merge.timeout|20
+merge.interval|15
+app.enabled|true
+human_check.enabled|false'
 
 # config.sh --default <path>: print that setting's default (following @refs) so scripts that run without the
 # config env fall back to the same value as the workflows. Exit 2 on an unknown path.

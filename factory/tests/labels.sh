@@ -54,7 +54,7 @@ words=$(j -r '.labels[].old[], .removed[].name' "$defs" | grep -vE '[-:]' | past
 files=$(cd "$factory/.." && ls factory/*.sh factory/*.md workflows/*.yml .github/workflows/*.yml 2> /dev/null \
   | grep -v -e 'factory/labels-sync.sh' -e 'factory/bridge-migrate-state.sh')
 found=$(cd "$factory/.." && {
-  grep -nE "(^|[^A-Za-z0-9_:./-])($olds)([^A-Za-z0-9_-]|$)" $files /dev/null
+  grep -nE "(^|[^A-Za-z0-9_:./-])($olds)([^A-Za-z0-9_.-]|$)" $files /dev/null
   grep -nE -- "(-label[ =]+[\"']?|labels=[\"']?|name == \\\\?\")($words)([\"' ,)]|$)" $files /dev/null
 } || true)
 eq "old label names left" "" "$found"

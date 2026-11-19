@@ -10,6 +10,8 @@
 #   PROBE_FILES_RE   an ERE on the repository-relative path (default ^crates/[^/]+/tests/[^/]+\.rs$)
 #   PROBE_FILES_CMD  instead of the ERE: a shell command that reads candidate paths on stdin and prints
 #                    the acceptance files among them
+#   PROBE_FILES_GLOB instead of the ERE: space-separated shell globs (acceptance.glob; `*` may cross `/`),
+#                    a path matching any of them is an acceptance file
 #
 # A rule that matches no file in the whole repository is a configuration error (exit 2); a spec PR
 # that changes none of them is normal. The number of changed acceptance files is always printed.
@@ -63,15 +65,28 @@ runners=$(printf '%s' "${PROBE_RUNNERS:-cargo}" | tr ', \t' '\n\n\n' | sed '/^$/
 for r in $runners; do
   case "$r" in cargo | pytest | vitest | go) ;; *) conf "unknown runner '$r' in PROBE_RUNNERS (cargo, pytest, vitest, go)" ;; esac
 done
-if [ -z "${PROBE_FILES_RE:-}${PROBE_FILES_CMD:-}" ] && [ "$runners" != cargo ]; then
-  conf "PROBE_RUNNERS other than cargo need PROBE_FILES_RE (or PROBE_FILES_CMD) to say which files are acceptance tests"
+if [ -z "${PROBE_FILES_RE:-}${PROBE_FILES_CMD:-}${PROBE_FILES_GLOB:-}" ] && [ "$runners" != cargo ]; then
+  conf "PROBE_RUNNERS other than cargo need PROBE_FILES_RE, PROBE_FILES_GLOB or PROBE_FILES_CMD to say which files are acceptance tests"
 fi
 re=${PROBE_FILES_RE:-'^crates/[^/]+/tests/[^/]+\.rs$'}
 # acceptance: the acceptance files among the paths on stdin.
 acceptance() {
-  if [ -n "${PROBE_FILES_CMD:-}" ]; then bash -c "$PROBE_FILES_CMD"; else grep -E "$re"; fi
+  if [ -n "${PROBE_FILES_CMD:-}" ]; then bash -c "$PROBE_FILES_CMD"
+  elif [ -n "${PROBE_FILES_GLOB:-}" ]; then
+    local p g; local -a gs
+    read -ra gs <<< "$(set -f; printf '%s ' $PROBE_FILES_GLOB)"
+    while IFS= read -r p; do
+      for g in "${gs[@]}"; do
+        # shellcheck disable=SC2053 # the glob is a pattern on purpose
+        [[ $p == $g ]] && { printf '%s
+' "$p"; break; }
+      done
+    done
+  else grep -E "$re"; fi
 }
-rule=PROBE_FILES_RE; [ -n "${PROBE_FILES_CMD:-}" ] && rule=PROBE_FILES_CMD
+rule=PROBE_FILES_RE
+[ -n "${PROBE_FILES_GLOB:-}" ] && rule=PROBE_FILES_GLOB
+[ -n "${PROBE_FILES_CMD:-}" ] && rule=PROBE_FILES_CMD
 
 mb=$(git merge-base "$base" HEAD 2>/dev/null) || { echo "acceptance-probe: no merge base with $base" >&2; exit 2; }
 all=$( { git ls-files; git ls-files --others --exclude-standard; } | tr -d '\r' | acceptance | head -n 1)

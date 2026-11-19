@@ -302,6 +302,8 @@ for s in $specs; do
     continue
   fi
   if [ "$total" -eq "$done" ]; then
+    # human_check.enabled: a person checks the spec (wait:check) before it is closed (human-check.sh).
+    REPO="$REPO" bash "$here/human-check.sh" "$s" || continue
     gh issue close "$s" --repo "$REPO" --reason completed --comment "All $total tickets merged."
     continue
   fi
@@ -312,6 +314,7 @@ for s in $specs; do
   # A spec whose only open tickets are deferred is finished: close it, naming what was left open.
   if [ -n "$subs_state" ] && ! printf '%s\n' "$subs_state" | grep -q ' open$'; then
     left=$(printf '%s\n' "$subs_state" | awk '$2 == "deferred" { printf "%s#%s", (n++ ? " " : ""), $1 }')
+    REPO="$REPO" bash "$here/human-check.sh" "$s" || continue
     gh issue close "$s" --repo "$REPO" --reason completed \
       --comment "All $total tickets merged or deferred. Deferred, left open: $left."
     continue

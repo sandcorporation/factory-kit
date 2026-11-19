@@ -10,7 +10,7 @@
 #                                                      only dispatch Odin
 #                                     mode=new         the spec has no sub-issues: create tickets and their tests
 #                                     mode=decomposed  some open ticket has no acceptance test in the checkout
-#                                                      (no `#[ignore = "#N"]` under crates/): write only those
+#                                                      (no acceptance marker left, spec-tests.sh left): write only those
 #                                     mode=done        every open ticket already has its tests: nothing to do
 #                                   and tickets=<open tickets without tests, space-separated> (decomposed),
 #                                   pr=<spec PR number> (specpr).
@@ -81,8 +81,8 @@ spec_pr() {
 }
 
 # Whether the checkout has an acceptance test of ticket #N.
-has_tests() {
-  grep -rqF --include='*.rs' -- "#[ignore = \"#$1\"]" "$ROOT/crates" 2> /dev/null
+has_tests() { # the ticket's markers (spec-tests.sh: acceptance.marker / acceptance.markers)
+  FACTORY_ROOT="$ROOT" bash "$here/spec-tests.sh" left "$1" > /dev/null 2>&1
 }
 
 state() {
@@ -198,8 +198,14 @@ finish() {
   (
     cd "$ROOT" || exit 1
     git checkout -q -B "$branch" || exit 1
-    git add -- "$GLOB" || exit 1
-    other=$(git status --porcelain --untracked-files=all -- . ":(exclude)$GLOB")
+    # acceptance.glob may hold several globs (space-separated); add what each one matches.
+    globs=() excl=()
+    while IFS= read -r g; do globs+=("$g"); excl+=(":(exclude)$g"); done       < <(FACTORY_ACCEPTANCE_GLOB="$GLOB" bash "$here/spec-tests.sh" globs)
+    for g in "${globs[@]}"; do
+      [ -n "$(git ls-files -mo --exclude-standard -- "$g")" ] || continue
+      git add -- "$g" || exit 1
+    done
+    other=$(git status --porcelain --untracked-files=all -- . "${excl[@]}")
     if [ -n "$other" ]; then
       echo "::warning::Decompose changed files outside the acceptance tests; not committed:"
       echo "$other"
