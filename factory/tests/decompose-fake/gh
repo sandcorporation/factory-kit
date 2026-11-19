@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Shim in front of the shared fake gh (tests/fake/gh, a kit file) for tests/decompose.sh only.
+# The shared fake does not edit issue bodies; this takes the spec budget's
+#   gh api -X PATCH repos/<o>/<r>/issues/<n> --input <file>
+# (sets issue-<n>.json's .body from the file's .body, logs to calls.log; fails while fail-body-edit exists in
+# $FAKE_GH) and passes every other call on to the shared fake.
+set -u
+d=${FAKE_GH:?FAKE_GH is not set}
+here=$(cd "$(dirname "$0")" && pwd)
+if [ "${1:-} ${2:-} ${3:-}" = "api -X PATCH" ] && [ "${5:-}" = --input ]; then
+  case "${4:-}" in
+    repos/*/*/issues/*)
+      printf '%s\n' "$*" >> "$d/calls.log"
+      [ -e "$d/fail-body-edit" ] && { echo "fake gh: editing bodies is broken" >&2; exit 1; }
+      f="$d/issue-${4##*/}.json"
+      [ -f "$f" ] || { echo "fake gh: no issue #${4##*/}" >&2; exit 1; }
+      jq --slurpfile b "$6" '.body = $b[0].body' "$f" | tr -d '\r' > "$f.new" && mv "$f.new" "$f"
+      cat "$f"
+      exit 0 ;;
+  esac
+fi
+exec bash "$here/../fake/gh" "$@"
