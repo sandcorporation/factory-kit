@@ -2,11 +2,11 @@
 # The scripted half of the factory Verify run (factory-verify.yml, spec #249 "Verify").
 #
 #   verify.sh mech <N> <base>            machine checks of ticket #N's branch (the checkout's HEAD)
-#                                        against <base> (origin/main). Prints every problem and
+#                                        against <base> (origin/<base setting>). Prints every problem and
 #                                        exits 1 when there is one:
 #                                        1. no `#[ignore = "#N"]` is left in any tracked *.rs file;
 #                                        2. the branch's change to the acceptance tests
-#                                           (crates/*/tests/spec_*.rs, `git diff <base>...HEAD`)
+#                                           (`acceptance.glob`, `git diff <base>...HEAD`)
 #                                           only deletes `#[ignore = "#N"]` lines. Any other added,
 #                                           deleted or changed line (an assertion, a removed test,
 #                                           another ticket's ignore) is "the acceptance test changed";
@@ -50,6 +50,7 @@
 # (seconds between merge attempts, default 15). Needs bash, git, gh and jq.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
+glob=${FACTORY_ACCEPTANCE_GLOB:-$(bash "$here/config.sh" --default acceptance.glob)}
 . "$here/lib/labels.sh"
 REPO=${REPO:-${GITHUB_REPOSITORY:-}}
 # Every send-back comment starts with this; `kind=` follows since #307 (none: acceptance).
@@ -114,7 +115,7 @@ mech() {
           problems=1
         fi ;;
     esac
-  done < <(git diff --unified=0 --no-color --no-ext-diff --no-renames "$base"...HEAD -- 'crates/*/tests/spec_*.rs')
+  done < <(git diff --unified=0 --no-color --no-ext-diff --no-renames "$base"...HEAD -- "$glob")
 
   if [ "$problems" -ne 0 ]; then return 1; fi
   echo "기계 검사 통과: \`$attr\`·\`$stub\` 없음, 인수 시험의 변경은 이 티켓의 ignore 줄 지우기뿐"

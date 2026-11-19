@@ -3,7 +3,7 @@
 # The Implementer opens a PR and dispatches this run; it never merges. Verify, a different run on
 # a different model, decides:
 #   1. machine checks (${{ env.FACTORY_KIT }}/factory/verify.sh mech): the ticket's `#[ignore = "#N"]` lines are
-#      all gone and the acceptance tests (crates/*/tests/spec_*.rs) are otherwise untouched;
+#      all gone and the acceptance tests (`acceptance.glob`, $FACTORY_ACCEPTANCE_GLOB) are otherwise untouched;
 #   2. the branch on today's main passes `${{ env.FACTORY_CHECK }}` (skipped when the PR head is the commit
 #      the Implementer checked, `<!-- factory-checked <sha> -->`, and already sits on main);
 #   3. an acceptance review on Sonnet (${{ env.FACTORY_KIT }}/factory/verify.md): every acceptance criterion met,
@@ -149,7 +149,7 @@ jobs:
             | sed -n 's/.*<!-- factory-checked \([0-9a-f]*\) -->.*/\1/p' | tail -n 1)
           git config user.name "${{ env.FACTORY_GIT_NAME }}"
           git config user.email "${{ env.FACTORY_GIT_EMAIL }}"
-          git fetch origin main "+refs/heads/$branch:refs/remotes/origin/$branch"
+          git fetch origin "$FACTORY_BASE" "+refs/heads/$branch:refs/remotes/origin/$branch"
           git switch -C "$branch" "origin/$branch"
           mkdir -p .factory
           echo ".factory/" >> .git/info/exclude
@@ -166,7 +166,7 @@ jobs:
         id: mech
         if: steps.pr.outputs.go == 'true'
         run: |
-          if bash ${{ env.FACTORY_KIT }}/factory/verify.sh mech "$N" origin/main > .factory/mech.md; then r=pass; else r=fail; fi
+          if bash ${{ env.FACTORY_KIT }}/factory/verify.sh mech "$N" "origin/$FACTORY_BASE" > .factory/mech.md; then r=pass; else r=fail; fi
           cat .factory/mech.md
           echo "mech=$r" >> "$GITHUB_OUTPUT"
 
@@ -182,10 +182,10 @@ jobs:
           CHECKED: ${{ steps.pr.outputs.checked }}
         run: |
           head=$(git rev-parse HEAD)
-          if git merge-base --is-ancestor origin/main HEAD && [ -n "$CHECKED" ] && [ "$head" = "$CHECKED" ]; then
+          if git merge-base --is-ancestor "origin/$FACTORY_BASE" HEAD && [ -n "$CHECKED" ] && [ "$head" = "$CHECKED" ]; then
             echo "::notice::the head is the checked commit on today's main; not running ${{ env.FACTORY_CHECK }} again"
             echo "ci=skip" >> "$GITHUB_OUTPUT"
-          elif git merge --no-edit origin/main; then
+          elif git merge --no-edit "origin/$FACTORY_BASE"; then
             echo "ci=run" >> "$GITHUB_OUTPUT"
           else
             files=$(git diff --name-only --diff-filter=U)

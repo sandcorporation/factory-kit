@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Odin's acceptance probe (#414, #492): are the spec PR's acceptance tests red for the right reason?
 #
-#   acceptance-probe.sh [<base ref>]        (default origin/main)
+#   acceptance-probe.sh [<base ref>]        (default origin/<base>, the `base` setting)
 #
 # Picks the acceptance test files the spec PR adds or changes (against the merge base with <base ref>,
 # working tree and untracked files included: Odin's fixes are not committed yet) and runs the tests in
@@ -53,8 +53,8 @@
 # are none), 1 otherwise, 2 on a usage or configuration error.
 set -u
 [ $# -le 1 ] || { echo 'usage: acceptance-probe.sh [<base ref>]' >&2; exit 2; }
-base=${1:-origin/main}
 here=$(cd "$(dirname "$0")" && pwd)
+base=${1:-origin/${FACTORY_BASE:-$(bash "$here/config.sh" --default base)}}
 log=${PROBE_LOG:-.factory/probe-cargo.log}
 green=${PROBE_GREEN:-fail}
 conf() { echo "acceptance-probe: $*" >&2; exit 2; }

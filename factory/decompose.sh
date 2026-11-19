@@ -17,7 +17,7 @@
 #   decompose.sh finish <S> <mode>  after the agent. In decomposed mode first removes `state:ready` from the
 #                                   spec's open tickets (Odin labels them again). Then, when the spec has
 #                                   `wait:decision`, stops: result=question, no commit, no PR, no dispatch.
-#                                   Otherwise commits the acceptance tests (crates/*/tests/spec_*.rs only) on
+#                                   Otherwise commits the acceptance tests (the `acceptance.glob` setting only) on
 #                                   factory/spec-<S>, pushes it, opens the spec PR (title "스펙: <title> 인수 시험
 #                                   (#S)", body `Refs #S` and the ticket list) and dispatches Odin:
 #                                   result=pr, pr=<number>.
@@ -44,7 +44,10 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/lib/labels.sh"
 REPO=${REPO:-${GITHUB_REPOSITORY:-}}
-BASE=${BASE:-main}
+BASE=${BASE:-${FACTORY_BASE:-$(bash "$here/config.sh" --default base)}}
+GLOB=${FACTORY_ACCEPTANCE_GLOB:-$(bash "$here/config.sh" --default acceptance.glob)}
+GIT_NAME=${FACTORY_GIT_NAME:-$(bash "$here/config.sh" --default git.name)}
+GIT_EMAIL=${FACTORY_GIT_EMAIL:-$(bash "$here/config.sh" --default git.email)}
 ROOT=${FACTORY_ROOT:-$(cd "$here/../.." && pwd)}
 
 # jq on Windows prints CRLF; strip the CR everywhere.
@@ -195,8 +198,8 @@ finish() {
   (
     cd "$ROOT" || exit 1
     git checkout -q -B "$branch" || exit 1
-    git add -- 'crates/*/tests/spec_*.rs' || exit 1
-    other=$(git status --porcelain --untracked-files=all | grep -v '^[AMD]  crates/[^/]*/tests/spec_[^/]*\.rs$')
+    git add -- "$GLOB" || exit 1
+    other=$(git status --porcelain --untracked-files=all -- . ":(exclude)$GLOB")
     if [ -n "$other" ]; then
       echo "::warning::Decompose changed files outside the acceptance tests; not committed:"
       echo "$other"
@@ -204,8 +207,8 @@ finish() {
     if git diff --cached --quiet; then
       echo "::warning::Decompose wrote no acceptance tests for #$s; the spec PR has only an empty commit"
     fi
-    git -c user.name="${FACTORY_GIT_NAME:-github-actions[bot]}" \
-      -c user.email="${FACTORY_GIT_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}" \
+    git -c user.name="$GIT_NAME" \
+      -c user.email="$GIT_EMAIL" \
       commit -q --allow-empty -m "스펙: $title 인수 시험 (#$s)" -m "$list" || exit 1
     bash "$here/app-git.sh" && git push -q origin "HEAD:refs/heads/$branch"
   ) || { echo "::error::could not commit or push $branch"; return 1; }

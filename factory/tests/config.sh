@@ -26,6 +26,20 @@ eq "repository from GitHub" own/repo "$(get FACTORY_REPO env)"
 eq "default scan" .github/ "$(get FACTORY_LABELS_SCAN env)"
 eq "default cache is off" "" "$(get FACTORY_CACHE env)"
 grep -q "^FACTORY_CACHE=$" "$root/env" && ok || bad "FACTORY_CACHE not written"
+eq "default acceptance glob" 'crates/*/tests/spec_*.rs' "$(get FACTORY_ACCEPTANCE_GLOB env)"
+eq "default acceptance glob output" 'crates/*/tests/spec_*.rs' "$(get acceptance_glob out)"
+eq "default base env" main "$(get FACTORY_BASE env)"
+
+run $'acceptance:\n  glob: "tests/acceptance/*.py"\n'
+eq "glob override exit" 0 "$code"
+eq "glob override" 'tests/acceptance/*.py' "$(get FACTORY_ACCEPTANCE_GLOB env)"
+
+# --default: one definition shared by scripts that run without the config env.
+eq "--default base" main "$(bash "$cfg" --default base)"
+eq "--default git.name" 'factory[bot]' "$(bash "$cfg" --default git.name)"
+eq "--default follows @refs" claude-opus-5-5 "$(bash "$cfg" --default models.odin)"
+eq "--default glob" 'crates/*/tests/spec_*.rs' "$(bash "$cfg" --default acceptance.glob)"
+bash "$cfg" --default no.such 2> /dev/null; eq "--default unknown exit" 2 "$?"
 
 run $'# c\nrepository: a/b\nbase: trunk   # comment\ncache: rust\nrunners:\n  default: big\nchecks:\n  full: "make check # all"\n  kill: \'x.exe\'\nmodels:\n  strong: s1\nenv:\n  FOO: 1\n'
 eq "exit" 0 "$code"

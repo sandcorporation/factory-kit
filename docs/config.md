@@ -26,7 +26,7 @@
 | 키 | 기본값 (`factory/config.sh`) | 뜻 | 쓰는 곳 |
 |---|---|---|---|
 | `repository` | 빈 값 → `$GITHUB_REPOSITORY` (`:21`, `:104`) | 공장이 다루는 저장소 `owner/name`. 환경 변수 `FACTORY_REPO`가 된다 | `factory/bench-gate.sh:22`, `factory/bridge.sh:124` 등 `FACTORY_REPO`를 읽는 스크립트 |
-| `base` | `main` | 티켓 PR의 기준 브랜치 | `factory-implementer.yml:647`(`gh pr create`). 아래 「어긋남」 참고 |
+| `base` | `main` | 티켓 PR의 기준 브랜치. 받아 오기·합치기·rebase·검사 기준(`origin/<base>`)도 이것이다. 설정 없이 도는 스크립트는 `config.sh --default base`를 쓴다 | `factory-implementer.yml`·`factory-verify.yml`의 `$FACTORY_BASE`, `factory/workflow-guard.sh`, `factory/acceptance-probe.sh`, `factory/decompose.sh` |
 | `runners.default` | `ubuntu-latest` | 가벼운 잡(설정·분해·티켓 고르기)의 러너 | `factory-decompose.yml:69`, `factory-implementer.yml:114`·`:140`·`:180`, `factory-resume.yml:72` |
 | `runners.implement` | `@runners.default` | 구현·Odin 잡의 러너 | `factory-implementer.yml:203`, `factory-odin.yml:98` |
 | `runners.verify` | `@runners.default` | Verify 잡의 러너 | `factory-verify.yml:88` |
@@ -49,6 +49,7 @@
 | `turns.odin` | `60` | Odin 검토 최대 턴 | `factory-odin.yml:289` |
 | `turns.verify` | `40` | 인수 검토 최대 턴 | `factory-verify.yml:254` |
 | `labels.scan` | `.github/` | `labels-sync.sh`가 옛 라벨 이름이 남았는지 훑을 경로 | `factory/labels-sync.sh:55-58` |
+| `acceptance.glob` | `crates/*/tests/spec_*.rs` | 인수 시험 파일의 git 경로 패턴. 분해가 커밋하는 파일, Verify가 「인수 시험을 고쳤다」를 보는 범위 | `factory/decompose.sh`, `factory/verify.sh` (`FACTORY_ACCEPTANCE_GLOB`) |
 | `env.<이름>` | 없음 | 그 이름의 환경 변수 | 작업 잡 전체 (`factory/config.sh:89-92`) |
 
 표의 workflow 경로는 모두 `.github/workflows/` 아래다.
@@ -75,8 +76,6 @@
 | `FACTORY_ODIN_WORKFLOW` | `factory-odin.yml` | `factory/decompose.sh:152`, `factory/odin.sh:263` |
 | `FACTORY_VERIFY_WORKFLOW` | `factory-verify.yml` | `factory/verify.sh:285`·`:316`, `factory/resume.sh:108` |
 
-## 어긋남(코드는 아직 그대로)
+## 알려진 한계
 
-- `base`를 바꿔도 여러 곳이 `origin/main`을 그대로 쓴다: `factory-implementer.yml:424-515`·`:535`, `factory-verify.yml:169`·`:185`·`:188`, `factory/workflow-guard.sh:74-85`, `factory/acceptance-probe.sh:56`. 지금은 `base: main`으로만 쓴다.
-- `cache`는 `rust`만 알아듣는다. 다른 값은 캐시 없이 돈다.
-- `factory/decompose.sh:207-208`의 git 이름 대체값(`github-actions[bot]`)이 `git.name` 기본값(`factory[bot]`)과 다르다.
+README의 「알려진 한계」를 본다. 스크립트가 설정 env 없이 돌 때는 `bash factory/config.sh --default <키>`로 이 표의 기본값을 한 곳에서 가져온다(`git.name`·`git.email`·`base`·`acceptance.glob`).

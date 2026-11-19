@@ -41,7 +41,18 @@ turns.fix|80
 turns.decompose|120
 turns.odin|60
 turns.verify|40
-labels.scan|.github/'
+labels.scan|.github/
+acceptance.glob|crates/*/tests/spec_*.rs'
+
+# config.sh --default <path>: print that setting's default (following @refs) so scripts that run without the
+# config env fall back to the same value as the workflows. Exit 2 on an unknown path.
+if [ "${1:-}" = --default ]; then
+  want=${2:-}
+  while :; do
+    d=$(printf '%s\n' "$defaults" | awk -F'|' -v p="$want" '$1 == p { print substr($0, length(p) + 2); f = 1 } END { exit !f }') || { echo "unknown setting '$want'" >&2; exit 2; }
+    case $d in @*) want=${d#@} ;; *) printf '%s\n' "$d"; exit 0 ;; esac
+  done
+fi
 
 parsed=''
 if [ -f "$file" ]; then

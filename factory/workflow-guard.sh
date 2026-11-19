@@ -17,9 +17,9 @@
 #
 # push-retry (#417): the refusal also comes when the branch touches no workflow file but main changed
 # one after the branch was made (a merge landed during the run): the pushed ref then reverts main's
-# workflow files. So: `git fetch origin main`; if the branch's own commits (`origin/main...HEAD`) touch
+# workflow files. So: `git fetch origin <base>`; if the branch's own commits (`origin/<base>...HEAD`) touch
 # `.github/workflows/`, hand over as before. Otherwise catch up with main and run `git push <push
-# args>` once more: <mode> `conflict` merges (`git merge --no-edit origin/main`, as conflict mode
+# args>` once more: <mode> `conflict` merges (`git merge --no-edit origin/<base>`, as conflict mode
 # already does: history is kept and the plain push still refuses to drop someone else's commits,
 # #504), any other mode rebases (the fresh branch is force-pushed anyway). A merge/rebase conflict or a
 # second refusal hands over, saying main was caught up with. Exit codes: 0 pushed after catching up
@@ -30,6 +30,7 @@
 set -u
 : "${REPO:?REPO is not set}"
 here=$(cd "$(dirname "$0")" && pwd)
+base=${FACTORY_BASE:-$(bash "$here/config.sh" --default base)}
 
 output() {
   if [ -n "${GITHUB_OUTPUT:-}" ]; then printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; else printf '%s\n' "$@"; fi
@@ -67,11 +68,11 @@ case "${1:-}" in
     issue=$2 log=$3 mode=$4
     shift 4
     if ! refused "$log"; then output blocked=false; exit 1; fi
-    if ! git fetch -q origin main; then
+    if ! git fetch -q origin "$base"; then
       handover "$issue" push-rejected "사유: workflow 파일. push 가 workflow 파일 때문에 거절됐고 main 을 받아 오지 못해 다시 시도하지 못했다. 사람이 처리한다. 실패 횟수는 늘리지 않았고 다시 돌리지 않는다."
       exit 3
     fi
-    files=$(git diff --name-only origin/main...HEAD -- .github/workflows/ | head -n 5 | tr '\n' ' ')
+    files=$(git diff --name-only "origin/$base"...HEAD -- .github/workflows/ | head -n 5 | tr '\n' ' ')
     if [ -n "$files" ]; then
       handover "$issue" workflow-change "사유: workflow 파일. 이 티켓은 \`.github/workflows/\` 를 바꾼다(${files% }). push 가 거절됐고 공장이 push 에 쓰는 토큰은 workflow 파일을 push 할 수 없어 사람이 처리한다. 실패 횟수는 늘리지 않았고 다시 돌리지 않는다."
       exit 3
@@ -79,10 +80,10 @@ case "${1:-}" in
     caught=true
     if [ "$mode" = conflict ]; then
       how='merge'
-      git merge -q --no-edit origin/main > /dev/null 2>&1 || { git merge --abort > /dev/null 2>&1; caught=false; }
+      git merge -q --no-edit "origin/$base" > /dev/null 2>&1 || { git merge --abort > /dev/null 2>&1; caught=false; }
     else
       how='rebase'
-      git rebase -q origin/main > /dev/null 2>&1 || { git rebase --abort > /dev/null 2>&1; caught=false; }
+      git rebase -q "origin/$base" > /dev/null 2>&1 || { git rebase --abort > /dev/null 2>&1; caught=false; }
     fi
     if [ "$caught" = false ]; then
       handover "$issue" push-rejected "사유: workflow 파일. push 가 workflow 파일 때문에 거절됐다(그 사이 main 이 workflow 파일을 바꾼 듯하다). main 을 따라잡으려 했지만 $how 가 충돌했다. 사람이 처리한다. 실패 횟수는 늘리지 않았고 다시 돌리지 않는다."

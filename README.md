@@ -49,6 +49,13 @@ REPO=owner/name bash factory/labels-sync.sh --apply  # 저장소 라벨을 label
 
 caller의 `uses: …@<태그>`와 `kit-ref: <태그>`를 **같은 태그**로 둔다. `uses:`는 workflow 파일의 판을, `kit-ref`는 그 workflow가 내려받을 `factory/` 스크립트의 판을 정한다. 둘이 다르면 workflow와 스크립트가 서로 다른 판이 된다. 브랜치 이름을 쓰면 그 브랜치가 움직일 때마다 공장이 바뀌므로 태그나 커밋으로 고정한다(`kit-ref` 입력 설명, `.github/workflows/factory-decompose.yml:15`).
 
+## 알려진 한계
+
+- rust·Windows 전제가 남아 있다: `cache`는 `rust`만 알아듣고, Odin 탐침 로그 이름이 `probe-cargo.log`이며, 분해 잡에 「Prepare rustfmt」 단계가 있고, 프로세스 정리에 `taskkill`을 쓴다.
+- 하루 경계(비용 장부·상한)는 KST 자정으로 고정돼 있다.
+- caller workflow는 `run-name`을 kit에서 복사해 와야 한다(재사용 workflow의 `run-name`은 caller에 적용되지 않는다).
+- 기본값의 `@키`(다른 설정 따르기)는 기본값 표에서만 해석한다. 설정 파일에 `@models.strong`처럼 쓰면 그 글자가 값이 된다.
+
 ## 시험
 
 ```sh

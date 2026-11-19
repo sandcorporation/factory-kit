@@ -420,9 +420,9 @@ jobs:
           MODE: ${{ steps.guard.outputs.mode }}
         run: |
           if [ "$MODE" = conflict ]; then
-            git fetch origin main
-            echo "main=$(git rev-parse origin/main)" >> "$GITHUB_OUTPUT"
-            if git merge --no-edit origin/main; then
+            git fetch origin "$FACTORY_BASE"
+            echo "main=$(git rev-parse "origin/$FACTORY_BASE")" >> "$GITHUB_OUTPUT"
+            if git merge --no-edit "origin/$FACTORY_BASE"; then
               echo "::notice::main merges into the PR's branch cleanly now"
               echo "conflict=false" >> "$GITHUB_OUTPUT"
             else
@@ -438,7 +438,7 @@ jobs:
           # so drop them and let "the agent made no commits" fail the run.
           if [ -n "$(git status --porcelain)" ]; then
             git status --short
-            if [ "$(git rev-list --count origin/main..HEAD)" -gt 0 ]; then
+            if [ "$(git rev-list --count "origin/$FACTORY_BASE"..HEAD)" -gt 0 ]; then
               echo "::warning::the agent left uncommitted changes; committing them"
               git add -A
               git commit -q -m "에이전트가 커밋하지 않은 변경을 남긴다"
@@ -451,13 +451,13 @@ jobs:
               git clean -fdq
             fi
           fi
-          git fetch origin main
-          echo "main=$(git rev-parse origin/main)" >> "$GITHUB_OUTPUT"
-          if git rebase origin/main; then
+          git fetch origin "$FACTORY_BASE"
+          echo "main=$(git rev-parse "origin/$FACTORY_BASE")" >> "$GITHUB_OUTPUT"
+          if git rebase "origin/$FACTORY_BASE"; then
             echo "conflict=false" >> "$GITHUB_OUTPUT"
           else
             git rebase --abort
-            git merge --no-edit origin/main || true
+            git merge --no-edit "origin/$FACTORY_BASE" || true
             echo "::warning::conflicts with main: $(git diff --name-only --diff-filter=U | tr '\n' ' ')"
             echo "conflict=true" >> "$GITHUB_OUTPUT"
           fi
@@ -473,7 +473,7 @@ jobs:
           prompt: |
             You are the Implementer run for ticket #${{ env.N }} in ${{ github.repository }}.
             You already implemented the ticket on branch ${{ env.BRANCH }}. Other tickets merged into
-            main meanwhile, and merging origin/main left conflicts (see `git status`).
+            main meanwhile, and merging origin/${{ env.FACTORY_BASE }} left conflicts (see `git status`).
             Resolve every conflict so that both your ticket's behaviour and main's changes survive.
             Never drop main's changes to make yours fit. Then run `${{ env.FACTORY_CHECK }}` until it passes.
             Do not commit, abort the merge or push: the workflow stages your work and makes the
@@ -512,7 +512,7 @@ jobs:
         id: commits
         if: steps.guard.outputs.go == 'true'
         run: |
-          if [ "$(git rev-list --count origin/main..HEAD)" -eq 0 ]; then
+          if [ "$(git rev-list --count "origin/$FACTORY_BASE"..HEAD)" -eq 0 ]; then
             echo "::error::the agent made no commits"; exit 1
           fi
 
@@ -532,7 +532,7 @@ jobs:
       - name: Workflow file guard
         id: wfguard
         if: steps.guard.outputs.go == 'true'
-        run: bash ${{ env.FACTORY_KIT }}/factory/workflow-guard.sh check "$N" origin/main || true
+        run: bash ${{ env.FACTORY_KIT }}/factory/workflow-guard.sh check "$N" "origin/$FACTORY_BASE" || true
 
       # Deterministic gate: the agent's word is not enough.
       # Processes the agent left running lock their
