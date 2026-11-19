@@ -183,8 +183,7 @@ eq "exit" 0 "$?"
 eq "merged" true "$(merged)"
 has "squash" "pulls/70/merge -f merge_method=squash" "$(calls)"
 has "branch deleted" "git/refs/heads/factory/spec-50" "$(calls)"
-eq "bot pull_request run deleted (#270)" "" "$(runs_left)"
-has "main built" "actions/workflows/ci.yml/dispatches" "$(calls)"
+lacks "main not dispatched (the App push builds it)" "/dispatches -f ref=main" "$(calls)"
 eq "open tickets approved" "61 62 63" "$(approved)"
 # #61 is blocked (an open blocker); #62 is the lowest-numbered unblocked ticket.
 eq "first dispatch" 62 "$(dispatched)"
@@ -251,7 +250,6 @@ eq "exit" 0 "$?"
 eq "closed" closed "$(jq -r .state "$FAKE_GH/pull-70.json" | tr -d '\r')"
 eq "not merged" false "$(merged)"
 has "branch deleted" "git/refs/heads/factory/spec-50" "$(calls)"
-eq "bot pull_request run deleted (#270)" "" "$(runs_left)"
 eq "open tickets approved" "61 62 63" "$(approved)"
 eq "first dispatch" 62 "$(dispatched)"
 has "says why" "인수 시험 0개" "$(pr_comments)"
@@ -277,7 +275,7 @@ has "PR hand-over marker (#359)" "<!-- factory-odin-human -->" "$(pr_comments)"
 odin_dispatches() { grep -c 'factory-odin.yml/dispatches' "$FAKE_GH/calls.log" | tr -d '\r'; }
 conflict_comments() { jq -r '[.[] | select(.body | startswith("<!-- factory-odin-conflict -->"))] | length' \
   "$FAKE_GH/comments-70.json" 2> /dev/null | tr -d '\r'; }
-conflict_files() { printf 'crates/facet-core/src/command.rs\ncrates/facet-app/src/text.rs\n' > "$tmp/files"; }
+conflict_files() { printf 'crates/app-core/src/command.rs\ncrates/app-ui/src/text.rs\n' > "$tmp/files"; }
 # comment_on_70 <body> [login]: a comment already on the spec PR (by the factory unless a login is given)
 comment_on_70() {
   f="$FAKE_GH/comments-70.json"
@@ -293,7 +291,7 @@ bash "$odin" conflict 50 70 "$tmp/files" "$tmp/reason.md" > /dev/null 2>&1
 eq "exit" 0 "$?"
 eq "resolve" true "$(out resolve)"
 eq "round counted on the PR" 1 "$(conflict_comments)"
-has "files on the PR" "crates/facet-core/src/command.rs" "$(pr_comments)"
+has "files on the PR" "crates/app-core/src/command.rs" "$(pr_comments)"
 has "round of limit" "풀기 1/2" "$(pr_comments)"
 eq "no dispatch without --dispatch" 0 "$(odin_dispatches)"
 eq "spec untouched" kind:spec "$(labels_of 50)"
@@ -345,10 +343,10 @@ eq "resolve" false "$(out resolve)"
 eq "rounds stay at the limit" 2 "$(conflict_comments)"
 eq "no third dispatch" 2 "$(odin_dispatches)"
 has "limit in the reason" "한도(2회)" "$(cat "$tmp/reason.md")"
-has "files in the reason" "crates/facet-app/src/text.rs" "$(cat "$tmp/reason.md")"
+has "files in the reason" "crates/app-ui/src/text.rs" "$(cat "$tmp/reason.md")"
 bash "$odin" human 50 70 "$tmp/reason.md" > /dev/null 2>&1
 eq "spec to a human" "kind:spec,state:human" "$(labels_of 50)"
-has "files on the spec" "crates/facet-core/src/command.rs" "$(spec_comments)"
+has "files on the spec" "crates/app-core/src/command.rs" "$(spec_comments)"
 eq "not merged" false "$(merged)"
 eq "no ticket approved" "" "$(approved)"
 

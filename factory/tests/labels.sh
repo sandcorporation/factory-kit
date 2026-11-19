@@ -103,5 +103,33 @@ case "$out" in *"--- label list diff"*"> state:ready"*) ok ;; *) bad "apply prin
 out=$(bash "$factory/labels-sync.sh" --apply 2>&1)
 case "$out" in *"rename"*|*"create"*|*"fix "*) bad "second apply still has work: $out" ;; *) ok ;; esac
 
+# --- sync: labels labels.json does not know are left exactly as they were
+current=foreign
+: > "$FAKE_GH/calls.log"
+jq -n '[{name: "ready-for-agent", color: "0E8A16", description: "old"},
+        {name: "needs-triage", color: "ededed", description: "theirs"},
+        {name: "team: web", color: "123456", description: "a label of the repository"}]' > "$FAKE_GH/repo-labels.json"
+foreign() { j -S '[.[] | select(.name == "needs-triage" or .name == "team: web")
+  | {name, color: (.color | ascii_downcase), description}] | sort_by(.name)' "$1"; }
+foreign "$FAKE_GH/repo-labels.json" > "$root/sync/foreign-before.json"
+bash "$factory/labels-sync.sh" --apply > /dev/null 2>&1
+eq "apply exit (foreign)" 0 "$?"
+eq "foreign labels unchanged" "$(cat "$root/sync/foreign-before.json")" "$(foreign "$FAKE_GH/repo-labels.json")"
+eq "foreign labels in the after snapshot" "$(cat "$root/sync/foreign-before.json")" "$(foreign "$root/sync/snap/after.json")"
+eq "no call names a foreign label" 0 "$(grep -cE 'needs-triage|team: web' "$FAKE_GH/calls.log")"
+
+# --- sync: old names in the repository's files are reported from the configured paths only
+current=scan
+mkdir -p "$root/repo/.github/workflows" "$root/repo/other"
+echo "  if: github.event.label.name == 'ready-for-agent'" > "$root/repo/.github/workflows/x.yml"
+echo "label: ready-for-agent" > "$root/repo/other/y.txt"
+jq -n '[{name: "ready-for-agent", color: "0E8A16", description: "old"}]' > "$FAKE_GH/repo-labels.json"
+out=$(FACTORY_REPO_DIR="$root/repo" bash "$factory/labels-sync.sh" 2>&1)
+case "$out" in *"old label name in .github/workflows/x.yml:1:"*) ok ;; *) bad "default scope .github/: $out" ;; esac
+case "$out" in *"other/y.txt"*) bad "outside the default scope: $out" ;; *) ok ;; esac
+out=$(FACTORY_REPO_DIR="$root/repo" FACTORY_LABELS_SCAN="other/" bash "$factory/labels-sync.sh" 2>&1)
+case "$out" in *"other/y.txt:1:"*) ok ;; *) bad "configured scope: $out" ;; esac
+case "$out" in *"x.yml"*) bad "configured scope replaces the default: $out" ;; *) ok ;; esac
+
 echo "labels: $passes passed, $fails failed"
 [ "$fails" -eq 0 ]

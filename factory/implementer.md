@@ -1,8 +1,8 @@
 # Implementer run
 
-You implement one ticket on a Windows CI runner, unattended. Nobody answers questions, so never stop to ask: make every judgement call yourself and record it in the PR body.
+You implement one ticket on a CI runner, unattended. Nobody answers questions, so never stop to ask: make every judgement call yourself and record it in the PR body.
 
-The workflow around you has already created your branch. After you finish, it runs `cargo xtask ci`, pushes the branch and opens a PR. It does **not** merge: a separate Verify run then checks the PR by machine (your ticket's acceptance tests are all switched on and untouched, see section 2) and judges every acceptance criterion and anything out of scope, and only then merges. If Verify finds a problem it closes the PR and sends the ticket back to you with its reasons; a second send-back hands the ticket to a human. **Do not push, do not open a PR and do not merge yourself.**
+The workflow around you has already created your branch. After you finish, it runs the project check command (`checks.full` in `.github/factory.yml`, in the run as `$FACTORY_CHECK`), pushes the branch and opens a PR. It does **not** merge: a separate Verify run then checks the PR by machine (your ticket's acceptance tests are all switched on and untouched, see section 2) and judges every acceptance criterion and anything out of scope, and only then merges. If Verify finds a problem it closes the PR and sends the ticket back to you with its reasons; a second send-back hands the ticket to a human. **Do not push, do not open a PR and do not merge yourself.**
 
 ## 1. Read
 
@@ -20,13 +20,13 @@ The workflow around you has already created your branch. After you finish, it ru
   - Change no other line of any `spec_*.rs` file: not an assertion, not a name, not a test you think is wrong, not another ticket's `#[ignore = "#…"]`, and do not add tests to those files (put your own tests in other test files). Verify rejects the PR on any such change, mechanically.
   - If you believe an acceptance test is wrong (it contradicts the ticket, the spec or an ADR, or cannot pass), do not edit it: stop as in section 4 and say which test and why.
 - Test-first for behaviour beyond the acceptance tests: write a failing test through the public interface, then make it pass.
-- Check only what you touched, and leave the full `cargo xtask ci` to the workflow (it takes 8 minutes cold and the workflow runs it right after you anyway, so running it yourself only doubles the time):
+- Check only what you touched, and leave the full check command to the workflow (it is slow cold and the workflow runs it right after you anyway, so running it yourself only doubles the time):
   - `cargo fmt --all`
   - `cargo clippy --all-targets -p <each crate you changed> -- -D warnings`
-  - the acceptance tests you switched on and the tests you wrote or that cover what you changed: `cargo test -p <crate> --test <file>` (or a name filter). A change to a crate others depend on (`facet-core`, `facet-win`, `facet-protocol`, `facet-index`) also needs `cargo build --workspace --all-targets` so dependents still compile.
-  - a benchmark only if the ticket adds or changes one, by its own subcommand: `cargo run --release -p facet-bench -- <name>`.
-- The workflow's `cargo xtask ci` (no arguments) runs only the benchmarks the branch's changes reach (`xtask/src/ci_select.rs` maps paths to benchmarks; it prints one line saying which and why) and runs the factory script tests only when `.github/factory/` or `.github/workflows/factory-*` changed. If the ticket's acceptance criteria name a benchmark limit, make sure that benchmark runs: a change to the code it measures selects it, and if you add a module, add it to the table in `ci_select.rs`. To run benchmarks by name locally: `cargo xtask ci --only bench --bench search,filter`.
-- If the workflow's `cargo xtask ci` fails after you finish, you get the failing log in the same run and one chance to fix it.
+  - the acceptance tests you switched on and the tests you wrote or that cover what you changed: `cargo test -p <crate> --test <file>` (or a name filter). A change to a crate other crates depend on also needs `cargo build --workspace --all-targets` so dependents still compile.
+  - a benchmark only if the ticket adds or changes one, by its own subcommand: the project's own benchmark command for it (see the repository's `AGENTS.md` or `CLAUDE.md`).
+- The repository's `AGENTS.md` or `CLAUDE.md` says what the check command runs (for example which benchmarks a change selects). If the ticket's acceptance criteria name a benchmark limit, make sure that benchmark runs under it.
+- If the workflow's check command fails after you finish, you get the failing log in the same run and one chance to fix it.
 - Run every command in the foreground and wait for it. Never start a command in the background: the run is unattended, so the session ends as soon as you stop replying, and work you were waiting on is lost.
 - Commit on the current branch in small, meaningful commits. Commit messages in Korean, imperative mood. Commit before you finish: uncommitted work is not pushed.
 

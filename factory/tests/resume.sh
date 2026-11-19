@@ -20,7 +20,7 @@ setup() {
   export FACTORY_NOW=1794884400 # 2026-11-17T03:00:00Z = 12:00 KST
   export FACTORY_DISPATCH_NEXT="$tmp/dispatch-next.sh"
   unset FACTORY_SPEC_BUDGET_USD FACTORY_DAILY_BUDGET_USD
-  mkdir -p "$FAKE_GH" "$FACTORY_ROOT/crates/facet-core/tests"
+  mkdir -p "$FAKE_GH" "$FACTORY_ROOT/crates/app-core/tests"
   : > "$GITHUB_OUTPUT"
   : > "$FAKE_GH/calls.log"
   printf '#!/usr/bin/env bash\necho next >> "%s"\n' "$tmp/next.log" > "$FACTORY_DISPATCH_NEXT"
@@ -55,7 +55,7 @@ pull() {
 }
 
 # A ticket's acceptance test in the checkout.
-tested() { printf '#[test]\n#[ignore = "#%s"]\nfn t%s() {}\n' "$1" "$1" >> "$FACTORY_ROOT/crates/facet-core/tests/spec_x.rs"; }
+tested() { printf '#[test]\n#[ignore = "#%s"]\nfn t%s() {}\n' "$1" "$1" >> "$FACTORY_ROOT/crates/app-core/tests/spec_x.rs"; }
 
 # ledger_comment <spec> <cost>: a ledger comment today (KST) on the ledger issue #900
 ledger_comment() {

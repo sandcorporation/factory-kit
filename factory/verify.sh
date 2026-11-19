@@ -19,8 +19,8 @@
 #                                        does not go onto today's main: conflict, rebase-ci, push;
 #                                        #307). The comment starts with the marker
 #                                        `<!-- factory-sendback kind=<kind> pr=<PR> -->`.
-#                                        acceptance: close the PR, delete its branch and its job-less
-#                                        bot ci.yml runs (prune-runs.sh); the Implementer starts over.
+#                                        acceptance: close the PR and delete its branch; the Implementer
+#                                        starts over.
 #                                        conflict: keep the PR and its branch; the Implementer only
 #                                        merges main into it and resolves (verify.sh conflict-pr).
 #                                        Each kind has its own limit (ACCEPTANCE_LIMIT 2,
@@ -39,16 +39,14 @@
 #                                        for each ticket first: skips one it stops, starts nothing
 #                                        on the daily budget (#501).
 #   verify.sh pass <N> <PR> [report]     squash-merge the PR (retrying while GitHub computes
-#                                        mergeability), delete its branch and its job-less bot
-#                                        ci.yml runs (prune-runs.sh), comment the report on the
-#                                        PR, close the ticket, dispatch ci.yml and release.yml on main
-#                                        and then the next ticket (dispatch-next.sh). Exits 1 when the
+#                                        mergeability), delete its branch, comment the report on the
+#                                        PR, close the ticket and dispatch the next ticket (dispatch-next.sh). Exits 1 when the
 #                                        PR could not be merged (nothing else is done then).
 #
 # Environment: REPO (or GITHUB_REPOSITORY), GH_TOKEN; RUN_URL (link in comments, optional);
 # FACTORY_DISPATCH_NEXT (command run instead of dispatch-next.sh, tests); FACTORY_GUARD (command run
-# with the ticket instead of `ledger.sh guard` in next-verify, tests); FACTORY_PRUNE_RUNS (command
-# run with the branch instead of prune-runs.sh, tests); FACTORY_MERGE_WAIT
+# with the ticket instead of `ledger.sh guard` in next-verify, tests);
+# FACTORY_MERGE_WAIT
 # (seconds between merge attempts, default 15). Needs bash, git, gh and jq.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
@@ -127,17 +125,6 @@ mech() {
 comment() { gh api "repos/$REPO/issues/$1/comments" -f "body=$2" >/dev/null; }
 add_label() { gh api "repos/$REPO/issues/$1/labels" -f "labels[]=$2" >/dev/null; }
 remove_label() { gh api -X DELETE "repos/$REPO/issues/$1/labels/$2" >/dev/null 2>&1 || true; }
-dispatch() { # dispatch <workflow file> [<input>=<value> ...]
-  local wf=$1; shift
-  local args=() kv
-  for kv in "$@"; do args+=(-f "inputs[${kv%%=*}]=${kv#*=}"); done
-  gh api -X POST "repos/$REPO/actions/workflows/$wf/dispatches" -f ref=main "${args[@]}" >/dev/null
-}
-# Delete the job-less ci.yml pull_request runs GitHub left on a factory PR branch (prune-runs.sh, #270).
-prune_runs() {
-  [ -n "$1" ] || return 0
-  if [ -n "${FACTORY_PRUNE_RUNS:-}" ]; then $FACTORY_PRUNE_RUNS "$1"; else bash "$here/prune-runs.sh" "$1"; fi
-}
 next_ticket() {
   if [ -n "${FACTORY_DISPATCH_NEXT:-}" ]; then
     $FACTORY_DISPATCH_NEXT "$@"
@@ -188,7 +175,6 @@ $reason"
     branch=$(pr_branch "$pr")
     gh api -X PATCH "repos/$REPO/pulls/$pr" -f state=closed >/dev/null || echo "::warning::could not close PR #$pr"
     delete_branch "$branch"
-    prune_runs "$branch"
   else
     unmark_checked "$pr"
   fi
@@ -245,7 +231,7 @@ pass() {
   local n=$1 pr=$2 report=${3:-} branch attempt merged=false
   branch=$(pr_branch "$pr")
   for attempt in 1 2 3 4; do
-    if gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash >/dev/null; then
+    if GH_TOKEN="${FACTORY_APP_TOKEN:-${GH_TOKEN:-}}" gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash >/dev/null; then
       merged=true; break
     fi
     echo "::notice::merge attempt $attempt of PR #$pr failed; GitHub may still be computing mergeability"
@@ -256,20 +242,17 @@ pass() {
     return 1
   fi
   delete_branch "$branch"
-  prune_runs "$branch"
   if [ -n "$report" ] && [ -s "$report" ]; then
     gh api "repos/$REPO/issues/$pr/comments" -f "body=Verify$(run_link): 통과
 
 $(cat "$report")" >/dev/null || true
   fi
-  # A GITHUB_TOKEN merge does not reliably close the ticket via `Closes #N`, and fires no
-  # `issues: closed` or push event: close it, build main and move the chain on here.
+  # Close the ticket here rather than relying on `Closes #N`. The merge is made with the App
+  # token, so its push event builds main by itself.
   comment "$n" "Merged in PR #$pr$(run_link)" || true
   gh api -X PATCH "repos/$REPO/issues/$n" -f state=closed -f state_reason=completed >/dev/null \
     || echo "::warning::could not close #$n"
   remove_label "$n" "${L_RUNNING}"
-  dispatch ci.yml || echo "::warning::could not dispatch ci.yml"
-  dispatch release.yml || echo "::warning::could not dispatch release.yml"
   next_ticket
 }
 
@@ -299,7 +282,7 @@ verify_guard() {
 
 next_verify() {
   local skip=${1:-0} others waiting p n go reason
-  others=$(gh run list --repo "$REPO" --workflow factory-verify.yml --limit 50 \
+  others=$(gh run list --repo "$REPO" --workflow ${FACTORY_VERIFY_WORKFLOW:-factory-verify.yml} --limit 50 \
     --json databaseId,status,displayTitle \
     --jq "[.[] | select(.status != \"completed\" and .databaseId != ${GITHUB_RUN_ID:-0})] | length" | tr -d '\r') \
     || { echo "::warning::could not list the Verify runs"; return 0; }
@@ -330,7 +313,7 @@ next_verify() {
       continue
     fi
     echo "PR #$p of #$n waits for Verify"
-    gh workflow run factory-verify.yml --repo "$REPO" -f issue="$n" -f pr="$p" \
+    gh workflow run ${FACTORY_VERIFY_WORKFLOW:-factory-verify.yml} --repo "$REPO" -f issue="$n" -f pr="$p" \
       || echo "::warning::could not dispatch Verify for PR #$p"
     return 0
   done <<< "$waiting"

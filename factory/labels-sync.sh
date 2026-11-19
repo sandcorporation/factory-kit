@@ -51,6 +51,22 @@ snapshot() { # snapshot <file>
 
 snapshot "$snap/before.json"
 
+# Old label names left in the repository's own files (workflows, scripts). The paths come from
+# `labels.scan` in .github/factory.yml (FACTORY_LABELS_SCAN, space separated, default `.github/`),
+# relative to FACTORY_REPO_DIR (default: the current folder). Reported only, never edited.
+scan_old_names() {
+  local dir=${FACTORY_REPO_DIR:-.} paths=${FACTORY_LABELS_SCAN:-.github/} olds p hits
+  olds=$(j -r '.labels[].old[], .removed[].name' "$defs" | sed 's/[.[\*^$]/\&/g' | paste -sd'|')
+  [ -n "$olds" ] || return 0
+  for p in $paths; do
+    [ -e "$dir/$p" ] || continue
+    hits=$(cd "$dir" && grep -rnE "(^|[^A-Za-z0-9_:./-])($olds)([^A-Za-z0-9_-]|$)" "$p" 2> /dev/null || true)
+    [ -n "$hits" ] && printf 'old label name in %s\n' "$hits" | sed '2,$s/^/old label name in /'
+  done
+  return 0
+}
+scan_old_names
+
 # One action per line: rename <old> <new> | create <new> | fix <new> | report <removed>
 plan=$(j -r --slurpfile have "$snap/before.json" '
   ($have[0] | map({key: .name, value: .}) | from_entries) as $h

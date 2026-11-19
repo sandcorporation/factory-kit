@@ -149,11 +149,11 @@ dispatch_odin() {
     echo "::notice::#$1 is deferred (${L_DEFERRED}); Odin is not dispatched"
     return 0
   fi
-  if gh api -X POST "repos/$REPO/actions/workflows/factory-odin.yml/dispatches" \
+  if gh api -X POST "repos/$REPO/actions/workflows/${FACTORY_ODIN_WORKFLOW:-factory-odin.yml}/dispatches" \
     -f "ref=$BASE" -f "inputs[spec]=$1" > /dev/null; then
-    echo "dispatched factory-odin.yml for #$1"
+    echo "dispatched ${FACTORY_ODIN_WORKFLOW:-factory-odin.yml} for #$1"
   else
-    echo "::warning::could not dispatch factory-odin.yml for #$1 (missing or disabled?)"
+    echo "::warning::could not dispatch ${FACTORY_ODIN_WORKFLOW:-factory-odin.yml} for #$1 (missing or disabled?)"
   fi
 }
 
@@ -204,10 +204,10 @@ finish() {
     if git diff --cached --quiet; then
       echo "::warning::Decompose wrote no acceptance tests for #$s; the spec PR has only an empty commit"
     fi
-    git -c user.name='github-actions[bot]' \
-      -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+    git -c user.name="${FACTORY_GIT_NAME:-github-actions[bot]}" \
+      -c user.email="${FACTORY_GIT_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}" \
       commit -q --allow-empty -m "스펙: $title 인수 시험 (#$s)" -m "$list" || exit 1
-    git push -q origin "HEAD:refs/heads/$branch"
+    bash "$here/app-git.sh" && git push -q origin "HEAD:refs/heads/$branch"
   ) || { echo "::error::could not commit or push $branch"; return 1; }
 
   body="Refs #$s
@@ -217,7 +217,7 @@ Decompose가 쓴 티켓별 인수 시험(\`#[ignore = \"#<티켓>\"]\`)이다. O
 ## 티켓
 
 $list"
-  pr=$(gh api "repos/$REPO/pulls" -f "title=스펙: $title 인수 시험 (#$s)" -f "head=$branch" -f "base=$BASE" \
+  pr=$(GH_TOKEN="${FACTORY_APP_TOKEN:-${GH_TOKEN:-}}" gh api "repos/$REPO/pulls" -f "title=스펙: $title 인수 시험 (#$s)" -f "head=$branch" -f "base=$BASE" \
     -f "body=$body" | j -r '.number // empty')
   if [ -z "$pr" ]; then echo "::error::could not open the spec PR of #$s"; return 1; fi
   echo "opened spec PR #$pr"

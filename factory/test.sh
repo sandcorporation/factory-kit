@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs every factory script test (.github/factory/tests/*.sh) and exits 1 if any fails.
-# `cargo xtask ci` calls this ("공장 스크립트 시험"). The tests put a fake `gh` first on PATH and
+# Runs every factory script test (factory/tests/*.sh) and exits 1 if any fails.
+# CI calls this ("공장 스크립트 시험"). The tests put a fake `gh` first on PATH and
 # need jq, as the scripts themselves do.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)

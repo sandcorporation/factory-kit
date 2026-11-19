@@ -18,8 +18,7 @@
 #                                       `<!-- factory-human -->` with the reason on it. Nothing is merged.
 #   odin.sh pass <S> <PR> [report]      the checks passed and the workflow pushed Odin's fixes: comment the
 #                                       report on the spec PR, squash-merge it (retrying while GitHub
-#                                       computes mergeability), delete its branch and its job-less
-#                                       bot ci.yml runs (prune-runs.sh), build main, label the
+#                                       computes mergeability), delete its branch, label the
 #                                       spec's open tickets `state:ready` and dispatch the first one
 #                                       (dispatch-next.sh --tickets-only --candidates <them>: the
 #                                       label search may lag, so the approved tickets are named: the
@@ -41,8 +40,7 @@
 #                                       runs `human`.
 #
 # Environment: REPO (or GITHUB_REPOSITORY), GH_TOKEN, BASE (default main); RUN_URL (link in comments,
-# optional); FACTORY_DISPATCH_NEXT (command run instead of dispatch-next.sh, tests); FACTORY_PRUNE_RUNS
-# (command run with the branch instead of prune-runs.sh, tests);
+# optional); FACTORY_DISPATCH_NEXT (command run instead of dispatch-next.sh, tests);
 # FACTORY_MERGE_WAIT (seconds between merge attempts, default 15); ODIN_CONFLICT_LIMIT (conflict
 # rounds before a human, default 2). Needs bash, gh and jq.
 set -u
@@ -75,13 +73,6 @@ has_label() { # has_label <issue> <label>
 delete_branch() {
   gh api -X DELETE "repos/$REPO/git/refs/heads/$1" > /dev/null 2>&1 \
     || echo "::warning::could not delete branch $1"
-}
-# Delete the job-less ci.yml pull_request runs GitHub left on the spec PR branch (prune-runs.sh, #270).
-prune_runs() {
-  if [ -n "${FACTORY_PRUNE_RUNS:-}" ]; then $FACTORY_PRUNE_RUNS "$1"; else bash "$here/prune-runs.sh" "$1"; fi
-}
-dispatch() { # dispatch <workflow file>
-  gh api -X POST "repos/$REPO/actions/workflows/$1/dispatches" -f "ref=$BASE" > /dev/null
 }
 
 # Number of the open spec PR of a spec, empty when there is none (as decompose.sh finds it).
@@ -162,7 +153,7 @@ human() {
 Odin$(run_link): 병합하지 않음
 
 $reason" || echo "::warning::could not comment on PR #$pr"
-  bash "$here/hand-to-human.sh" "$s" spec-merge-failed "Odin이 스펙 PR #$pr을 병합하지 못했다$(run_link). 공장은 이 spec을 더 돌리지 않는다: 사람이 아래 까닭을 보고 스펙 PR을 고친 뒤 \`${L_HUMAN}\`을 떼고 Odin을 다시 돌린다(\`factory-odin.yml\`, 입력 spec=$s).
+  bash "$here/hand-to-human.sh" "$s" spec-merge-failed "Odin이 스펙 PR #$pr을 병합하지 못했다$(run_link). 공장은 이 spec을 더 돌리지 않는다: 사람이 아래 까닭을 보고 스펙 PR을 고친 뒤 \`${L_HUMAN}\`을 떼고 Odin을 다시 돌린다(\`${FACTORY_ODIN_WORKFLOW:-factory-odin.yml}\`, 입력 spec=$s).
 
 $reason" || echo "::warning::could not hand #$s to a human"
 }
@@ -204,7 +195,7 @@ pass() {
 $(cat "$report")" || echo "::warning::could not comment on PR #$pr"
   fi
   for attempt in 1 2 3 4; do
-    if gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash > /dev/null; then
+    if GH_TOKEN="${FACTORY_APP_TOKEN:-${GH_TOKEN:-}}" gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash > /dev/null; then
       merged=true
       break
     fi
@@ -216,9 +207,7 @@ $(cat "$report")" || echo "::warning::could not comment on PR #$pr"
     return 1
   fi
   delete_branch "$(branch_of "$s")"
-  prune_runs "$(branch_of "$s")"
-  # A GITHUB_TOKEN merge fires no push event: build main here, as verify.sh does.
-  dispatch ci.yml || echo "::warning::could not dispatch ci.yml"
+  # The merge is made with the App token, so its push event builds main by itself.
   start_chain "$s"
 }
 
@@ -230,7 +219,6 @@ empty() {
     || echo "::warning::could not comment on PR #$pr"
   gh api -X PATCH "repos/$REPO/pulls/$pr" -f state=closed > /dev/null || echo "::warning::could not close PR #$pr"
   delete_branch "$(branch_of "$s")"
-  prune_runs "$(branch_of "$s")"
   start_chain "$s"
 }
 
@@ -272,9 +260,9 @@ $list"; then
     return 1
   fi
   if [ "$dispatch" = --dispatch ]; then
-    if gh api -X POST "repos/$REPO/actions/workflows/factory-odin.yml/dispatches" \
+    if gh api -X POST "repos/$REPO/actions/workflows/${FACTORY_ODIN_WORKFLOW:-factory-odin.yml}/dispatches" \
       -f "ref=$BASE" -f "inputs[spec]=$s" -f "inputs[mode]=conflict" > /dev/null; then
-      echo "dispatched factory-odin.yml for #$s (mode=conflict)"
+      echo "dispatched ${FACTORY_ODIN_WORKFLOW:-factory-odin.yml} for #$s (mode=conflict)"
     else
       printf '### 스펙 PR이 %s와 충돌해 충돌 풀기 run을 dispatch하려 했으나 실패했다\n\n충돌 파일:\n\n%s\n' \
         "$BASE" "$list" > "$reason"

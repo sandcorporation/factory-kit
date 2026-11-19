@@ -18,7 +18,7 @@ setup() {
   export FAKE_GH="$tmp/gh" FAKE_MAIL="$tmp/mail" XDG_STATE_HOME="$tmp/state"
   export BRIDGE_SINCE=2026-11-01T00:00:00Z
   unset BRIDGE_STATE_DIR BRIDGE_TO BRIDGE_CC SWITCHBOARD_PROFILE FACTORY_SPEC_QUEUE BRIDGE_TRUSTED_BOTS BRIDGE_HUMAN_CHECK_TO
-  export FACTORY_REPO=owner/facet # the copy of this kit in any repository passes these tests as is (#437)
+  export FACTORY_REPO=owner/gadget # the copy of this kit in any repository passes these tests as is (#437)
   export BRIDGE_TO_BOSS=test/boss BRIDGE_TO_COORD=test/coord
   mkdir -p "$FAKE_GH" "$FAKE_MAIL"
   echo '[]' > "$FAKE_GH/repo-comments.json"
@@ -91,7 +91,7 @@ arg() {
 }
 # tos: every send's recipient, space-separated
 tos() { jq -s -r '[.[].args as $a | $a[($a | index("--to")) + 1]] | join(" ")' "$FAKE_MAIL/sent.jsonl" 2> /dev/null | tr -d '\r'; }
-state() { tr -d '\r' < "$XDG_STATE_HOME/facet-factory-bridge/sent"; }
+state() { tr -d '\r' < "$XDG_STATE_HOME/gadget-factory-bridge/sent"; }
 
 # --- labels (#410 더함 2, 14번) ----------------------------------------------------------------------
 
@@ -102,9 +102,9 @@ run
 eq code 0 "$(code)"
 eq sends 1 "$(sent_count)"
 eq to test/coord "$(arg 0 --to)"
-eq task facet-factory "$(arg 0 --task)"
-eq key "facet-factory-label-301-state:human-2026-11-18T01-00-00Z-test-coord" "$(arg 0 --idempotency-key)"
-eq subject "[facet 공장] 사람 넘김(other): #301 티켓 하나" "$(arg 0 --subject)"
+eq task gadget-factory "$(arg 0 --task)"
+eq key "gadget-factory-label-301-state:human-2026-11-18T01-00-00Z-test-coord" "$(arg 0 --idempotency-key)"
+eq subject "[gadget 공장] 사람 넘김(other): #301 티켓 하나" "$(arg 0 --subject)"
 has body "까닭 댓글 없음" "$(arg 0 --body)"
 has "body link" "https://github.com/owner/repo/issues/301" "$(arg 0 --body)"
 eq "first line names the code (#437)" "종류: 사람 넘김(other) (state:human)" "$(arg 0 --body | head -n 1)"
@@ -173,7 +173,7 @@ labeled 311 wait:check 2026-11-18T02:00:00Z
 run
 eq code 0 "$(code)"
 eq sends 1 "$(sent_count)"
-eq subject "[facet 공장] 사람 확인: #311 확인 남음" "$(arg 0 --subject)"
+eq subject "[gadget 공장] 사람 확인: #311 확인 남음" "$(arg 0 --subject)"
 
 setup "queue done and no ticket: idle is sent once"
 issue 249 closed kind:spec "공장 개선"
@@ -184,7 +184,7 @@ run
 eq code 0 "$(code)"
 eq sends 1 "$(sent_count)"
 eq to test/coord "$(arg 0 --to)"
-eq key facet-factory-idle-249-250-test-coord "$(arg 0 --idempotency-key)"
+eq key gadget-factory-idle-249-250-test-coord "$(arg 0 --idempotency-key)"
 has subject "공장 idle" "$(arg 0 --subject)"
 run
 eq "once per queue" 1 "$(sent_count)"
@@ -218,7 +218,7 @@ comment 21 900 "<!-- factory-idle 249 -->
 run
 eq code 0 "$(code)"
 eq sends 1 "$(sent_count)"
-eq key facet-factory-idle-249-test-coord "$(arg 0 --idempotency-key)"
+eq key gadget-factory-idle-249-test-coord "$(arg 0 --idempotency-key)"
 
 # --- recipients ------------------------------------------------------------------------------------
 
@@ -233,10 +233,10 @@ export BRIDGE_CC="test/cc1, test/cc2,,"
 run
 eq code 0 "$(code)"
 eq tos "test/boss test/coord test/cc1 test/cc2 test/coord test/cc1 test/cc2" "$(tos)"
-eq "question subject" "[facet 공장] 질문: #249 공장 개선" "$(arg 0 --subject)"
-eq "cc key" "facet-factory-label-301-state:human-2026-11-18T01-00-00Z-test-cc1" "$(arg 2 --idempotency-key)"
+eq "question subject" "[gadget 공장] 질문: #249 공장 개선" "$(arg 0 --subject)"
+eq "cc key" "gadget-factory-label-301-state:human-2026-11-18T01-00-00Z-test-cc1" "$(arg 2 --idempotency-key)"
 eq "cc gets one line (#437)" "사람 넘김(other) #301 티켓 하나" "$(arg 2 --body)"
-eq "cc subject carries the code" "[facet 공장] 사람 넘김(other): #301 티켓 하나" "$(arg 2 --subject)"
+eq "cc subject carries the code" "[gadget 공장] 사람 넘김(other): #301 티켓 하나" "$(arg 2 --subject)"
 has "coordinator gets the order" "할 일 — 이 메일이 처리 지시다" "$(arg 1 --body)"
 eq "the question is unchanged: no processing order" no \
   "$(case "$(arg 0 --body)" in *"처리 지시"*) echo yes ;; *) echo no ;; esac)"
@@ -316,7 +316,7 @@ push 거절" "github-actions[bot]" 2026-11-17T02:00:00Z
 icomment 301 3 "<!-- factory-human workflow-change -->
 가짜" "stranger" 2026-11-17T03:00:00Z
 run
-eq subject "[facet 공장] 사람 넘김(push-rejected): #301 티켓 하나" "$(arg 0 --subject)"
+eq subject "[gadget 공장] 사람 넘김(push-rejected): #301 티켓 하나" "$(arg 0 --subject)"
 eq "first line" "종류: 사람 넘김(push-rejected) (state:human)" "$(arg 0 --body | head -n 1)"
 has quote "> push 거절" "$(arg 0 --body)"
 
@@ -325,8 +325,8 @@ issue 301 open state:human "티켓 하나"
 labeled 301 state:human 2026-11-18T01:00:00Z
 icomment 301 1 "<!-- factory-human -->
 옛 표지" "github-actions[bot]" 2026-11-17T01:00:00Z
-mkdir -p "$XDG_STATE_HOME/facet-factory-bridge"
-echo "label 301 state:human 2026-11-18T01:00:00Z test/coord" > "$XDG_STATE_HOME/facet-factory-bridge/sent"
+mkdir -p "$XDG_STATE_HOME/gadget-factory-bridge"
+echo "label 301 state:human 2026-11-18T01:00:00Z test/coord" > "$XDG_STATE_HOME/gadget-factory-bridge/sent"
 run
 eq code 0 "$(code)"
 eq sends 0 "$(sent_count)"
@@ -390,8 +390,8 @@ run
 eq code 0 "$(code)"
 eq sends 4 "$(sent_count)"
 eq tos "test/coord test/coord test/coord test/coord" "$(tos)"
-eq key facet-factory-13 "$(arg 0 --idempotency-key)"
-eq subject "[facet 공장] 하루 상한 멈춤: #900 장부" "$(arg 0 --subject)"
+eq key gadget-factory-13 "$(arg 0 --idempotency-key)"
+eq subject "[gadget 공장] 하루 상한 멈춤: #900 장부" "$(arg 0 --subject)"
 has "queue-empty" "spec 큐 바닥남" "$(arg 1 --subject)"
 has "stalled" "공장 막힘" "$(arg 2 --subject)"
 has "stalled body" "#301(state:human)이 #302을 막는다" "$(arg 2 --body)"
@@ -413,7 +413,7 @@ comment 14 900 "<!-- factory-budget-daily 2026-11-18 -->
 run
 eq code 0 "$(code)"
 eq sends 2 "$(sent_count)"
-eq "cap 0 subject" "[facet 공장] 하루 상한 0(멈춤): #900 장부" "$(arg 0 --subject)"
+eq "cap 0 subject" "[gadget 공장] 하루 상한 0(멈춤): #900 장부" "$(arg 0 --subject)"
 eq "no midnight for cap 0" no "$(case "$(arg 0 --body)" in *"0시"*) echo yes ;; *) echo no ;; esac)"
 has "what to do for cap 0" "상한 0: 일부러 멈춘 상태다" "$(arg 0 --body)"
 has "a cap above 0 still waits for midnight" "KST 0시가 지나면 공장이 스스로 다시 돈다" "$(arg 1 --body)"
@@ -423,13 +423,13 @@ markers
 export BRIDGE_CC=test/cc1
 run
 eq sends 8 "$(sent_count)"
-eq "cc key" facet-factory-13-test-cc1 "$(arg 1 --idempotency-key)"
+eq "cc key" gadget-factory-13-test-cc1 "$(arg 1 --idempotency-key)"
 has "cc state" "13 test/cc1" "$(state)"
 
 setup "a comment sent to the coordinator before #410 (bare id) is not sent to it again"
 markers
-mkdir -p "$XDG_STATE_HOME/facet-factory-bridge"
-printf '13\n14\n15\n16\n' > "$XDG_STATE_HOME/facet-factory-bridge/sent"
+mkdir -p "$XDG_STATE_HOME/gadget-factory-bridge"
+printf '13\n14\n15\n16\n' > "$XDG_STATE_HOME/gadget-factory-bridge/sent"
 run
 eq sends 0 "$(sent_count)"
 
@@ -582,7 +582,7 @@ icomment 301 71 "<!-- factory-human conflict -->
 export BRIDGE_TRUSTED_BOTS="example-bot[bot]"
 run
 has "reason quoted" "충돌이 풀리지 않는다" "$(arg 0 --body)"
-eq subject "[facet 공장] 사람 넘김(conflict): #301 티켓 하나" "$(arg 0 --subject)"
+eq subject "[gadget 공장] 사람 넘김(conflict): #301 티켓 하나" "$(arg 0 --subject)"
 
 setup "wait:check goes to the coordinator by default with the check order (#492)"
 issue 311 open wait:check "확인 남음" "- [ ] 한글 확인"
@@ -603,7 +603,7 @@ export BRIDGE_CC=test/cc1 BRIDGE_HUMAN_CHECK_TO=boss
 run
 eq code 0 "$(code)"
 eq tos "test/boss test/boss" "$(tos)"
-eq subject "[facet 공장] 사람 확인: #311 확인 남음" "$(arg 0 --subject)"
+eq subject "[gadget 공장] 사람 확인: #311 확인 남음" "$(arg 0 --subject)"
 eq "no processing order" no "$(case "$(arg 0 --body)" in *"처리 지시"*) echo yes ;; *) echo no ;; esac)"
 has "marker kind" "사람 확인" "$(arg 1 --subject)"
 has "marker todo" "미체크 항목을 손으로 확인해 체크한다" "$(arg 1 --body)"
@@ -640,7 +640,7 @@ labeled 320 state:human 2026-11-18T01:00:00Z
 export BRIDGE_CC=test/cc1
 run
 eq tos "test/coord test/cc1" "$(tos)"
-eq subject "[facet 공장] 로컬 작업자 몫: #320 워크플로 고침" "$(arg 0 --subject)"
+eq subject "[gadget 공장] 로컬 작업자 몫: #320 워크플로 고침" "$(arg 0 --subject)"
 has "local todo" "로컬 작업자가 구현한다" "$(arg 0 --body)"
 eq "cc line" "로컬 작업자 몫 #320 워크플로 고침" "$(arg 1 --body)"
 
@@ -653,8 +653,8 @@ eq tos "test/coord test/cc1 test/cc2" "$(tos)"
 
 setup "--seed after a bridge that kept bare ids sends no copy to BRIDGE_CC later (#492)"
 markers
-mkdir -p "$XDG_STATE_HOME/facet-factory-bridge"
-printf '13\n14\n15\n16\n' > "$XDG_STATE_HOME/facet-factory-bridge/sent"
+mkdir -p "$XDG_STATE_HOME/gadget-factory-bridge"
+printf '13\n14\n15\n16\n' > "$XDG_STATE_HOME/gadget-factory-bridge/sent"
 export BRIDGE_CC=test/cc1
 run --seed
 eq "seed sends nothing" 0 "$(sent_count)"
@@ -668,9 +668,9 @@ issue 301 open state:human "티켓 하나"
 labeled 301 state:human 2026-11-18T01:00:00Z
 issue 250 closed kind:spec "검색"
 export FACTORY_SPEC_QUEUE=250
-mkdir -p "$XDG_STATE_HOME/facet-factory-bridge"
+mkdir -p "$XDG_STATE_HOME/gadget-factory-bridge"
 printf '13\n14 test/coord\n15 ignored\n16\nlabel 301 state:human 2026-11-18T01:00:00Z test/coord\nidle 250 test/coord\nlabels-seeded\n' \
-  > "$XDG_STATE_HOME/facet-factory-bridge/sent"
+  > "$XDG_STATE_HOME/gadget-factory-bridge/sent"
 run
 eq code 0 "$(code)"
 eq sends 0 "$(sent_count)"

@@ -93,7 +93,7 @@ resume() {
   echo "spec #$s: mode=${mode:-?}"
   case "$mode" in
     new | decomposed | question)
-      dispatch factory-decompose.yml "issue=$s" || return 1
+      dispatch ${FACTORY_DECOMPOSE_WORKFLOW:-factory-decompose.yml} "issue=$s" || return 1
       output action=decompose ;;
     deferred)
       echo "::notice::spec #$s is deferred (${L_DEFERRED}); nothing to resume"
@@ -105,7 +105,7 @@ resume() {
       for n in $(in_progress_tickets "$s"); do
         pr=$(checked_pr "$n")
         if [ -n "$pr" ]; then
-          dispatch factory-verify.yml "issue=$n" "pr=$pr" || return 1
+          dispatch ${FACTORY_VERIFY_WORKFLOW:-factory-verify.yml} "issue=$n" "pr=$pr" || return 1
           output action=verify
           return 0
         fi

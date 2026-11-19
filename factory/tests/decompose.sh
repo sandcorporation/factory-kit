@@ -26,9 +26,9 @@ setup() {
   # A checkout of main with one merged acceptance test (ticket #301) and a bare origin.
   g init -q --bare "$tmp/origin.git"
   g init -q -b main "$FACTORY_ROOT"
-  mkdir -p "$FACTORY_ROOT/crates/facet-core/tests" "$FACTORY_ROOT/crates/facet-core/src"
-  printf '#[test]\n#[ignore = "#301"]\nfn a() {}\n' > "$FACTORY_ROOT/crates/facet-core/tests/spec_old_app.rs"
-  echo '// lib' > "$FACTORY_ROOT/crates/facet-core/src/lib.rs"
+  mkdir -p "$FACTORY_ROOT/crates/app-core/tests" "$FACTORY_ROOT/crates/app-core/src"
+  printf '#[test]\n#[ignore = "#301"]\nfn a() {}\n' > "$FACTORY_ROOT/crates/app-core/tests/spec_old_app.rs"
+  echo '// lib' > "$FACTORY_ROOT/crates/app-core/src/lib.rs"
   (cd "$FACTORY_ROOT" && g add -A && g commit -q -m init && g remote add origin "$tmp/origin.git" \
     && g push -q origin main)
 }
@@ -106,7 +106,7 @@ eq mode new "$(out mode)"
 setup "state: open tickets without an ignore marker in the checkout are decomposed"
 issue 249 kind:spec
 subs 249 301:open 302:open 303:closed 304:open
-printf '#[test]\n#[ignore = "#304"]\nfn b() {}\n' > "$FACTORY_ROOT/crates/facet-core/tests/spec_new_x.rs"
+printf '#[test]\n#[ignore = "#304"]\nfn b() {}\n' > "$FACTORY_ROOT/crates/app-core/tests/spec_new_x.rs"
 state 249
 eq mode decomposed "$(out mode)"
 eq tickets 302 "$(out tickets)"
@@ -147,7 +147,7 @@ eq "#301 labels" state:ready "$(labels_of 301)"
 
 setup "finish: a question (new spec) leaves no PR, branch, dispatch or state:ready"
 issue 249 kind:spec,wait:decision
-echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_x_app.rs"
+echo '// test' > "$FACTORY_ROOT/crates/app-core/tests/spec_x_app.rs"
 finish 249 new
 eq code 0 "$(cat "$tmp/code")"
 eq result question "$(out result)"
@@ -183,8 +183,8 @@ issue 249 kind:spec "비용 장부"
 issue 301 ""
 issue 302 model:strong
 subs 249 301:open 302:open
-echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_ledger_app.rs"
-echo '// stray' >> "$FACTORY_ROOT/crates/facet-core/src/lib.rs"
+echo '// test' > "$FACTORY_ROOT/crates/app-core/tests/spec_ledger_app.rs"
+echo '// stray' >> "$FACTORY_ROOT/crates/app-core/src/lib.rs"
 finish 249 new
 eq code 0 "$(cat "$tmp/code")"
 eq result pr "$(out result)"
@@ -201,7 +201,7 @@ eq "#301 labels" "" "$(labels_of 301)"
 eq dispatches 1 "$(dispatches)"
 has "dispatch input" "inputs[spec]=249" "$(grep dispatches "$FAKE_GH/calls.log")"
 eq branch yes "$(remote_branch 249)"
-eq "committed files" crates/facet-core/tests/spec_ledger_app.rs \
+eq "committed files" crates/app-core/tests/spec_ledger_app.rs \
   "$(git -C "$tmp/origin.git" diff --name-only main factory/spec-249 | tr -d '\r')"
 has "stray warning" "outside the acceptance tests" "$(cat "$tmp/log")"
 
@@ -210,7 +210,7 @@ issue 249 kind:spec
 issue 301 state:ready
 issue 302 state:ready,model:strong
 subs 249 301:open 302:open
-echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_ledger_more.rs"
+echo '// test' > "$FACTORY_ROOT/crates/app-core/tests/spec_ledger_more.rs"
 finish 249 decomposed
 eq result pr "$(out result)"
 eq "#301 labels" "" "$(labels_of 301)"
@@ -221,7 +221,7 @@ setup "finish: a new spec keeps existing state:ready off its hands (only decompo
 issue 249 kind:spec
 issue 301 ""
 subs 249 301:open
-echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_a_b.rs"
+echo '// test' > "$FACTORY_ROOT/crates/app-core/tests/spec_a_b.rs"
 finish 249 new
 eq "#301 labels" "" "$(labels_of 301)"
 eq "no label added" 0 "$(grep -c 'issues/301/labels' "$FAKE_GH/calls.log" || true)"
@@ -230,7 +230,7 @@ setup "finish: a failed Odin dispatch only warns"
 issue 249 kind:spec
 issue 301 ""
 subs 249 301:open
-echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_a_b.rs"
+echo '// test' > "$FACTORY_ROOT/crates/app-core/tests/spec_a_b.rs"
 touch "$FAKE_GH/fail-dispatch"
 finish 249 new
 eq code 0 "$(cat "$tmp/code")"
@@ -335,7 +335,7 @@ issue 249 kind:spec "비용 장부" "본문"
 issue 301 ""
 issue 302 model:strong
 subs 249 301:open 302:open
-echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_ledger_app.rs"
+echo '// test' > "$FACTORY_ROOT/crates/app-core/tests/spec_ledger_app.rs"
 finish 249 new
 eq result pr "$(out result)"
 eq body "본문
@@ -354,7 +354,7 @@ setup "finish: a failed budget edit only warns and the spec PR still opens"
 issue 249 kind:spec "" "본문"
 issue 301 ""
 subs 249 301:open
-echo '// test' > "$FACTORY_ROOT/crates/facet-core/tests/spec_a_b.rs"
+echo '// test' > "$FACTORY_ROOT/crates/app-core/tests/spec_a_b.rs"
 touch "$FAKE_GH/fail-body-edit"
 finish 249 new
 eq code 0 "$(cat "$tmp/code")"

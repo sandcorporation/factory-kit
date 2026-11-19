@@ -290,7 +290,7 @@ case "$method $path" in
     fi
     cat "$f"; exit 0 ;;
   "DELETE repos/"*/*/git/refs/heads/*) echo '{}'; exit 0 ;;
-  # prune-runs.sh: runs.json ([{id, event, head_branch, triggering_actor: {login}, jobs, cancelled}],
+  # runs.json ([{id, event, head_branch, triggering_actor: {login}, jobs, cancelled}],
   # default []; bench-gate.sh adds head_sha, status, conclusion). GET …/workflows/<f>/runs filters by the
   # query's branch=, event= and status= (status or conclusion), newest first as written; …/runs/<id>/jobs
   # gives {total_count: jobs}; DELETE …/runs/<id> removes the run (fails while fail-delete-run exists);

@@ -118,7 +118,7 @@ $text" > /dev/null \
 # implement_runs: "<ticket> <track> <run id>" per factory-implementer workflow_dispatch run that is not
 # completed, other than this run. Ticket 0 and track 1 for a run without the track title.
 implement_runs() {
-  gh run list --repo "$REPO" --workflow factory-implementer.yml --limit 100 \
+  gh run list --repo "$REPO" --workflow ${FACTORY_IMPLEMENTER_WORKFLOW:-factory-implementer.yml} --limit 100 \
     --json databaseId,status,event,displayTitle \
     --jq '.[] | select(.status != "completed" and .event == "workflow_dispatch"
       and .databaseId != '"${GITHUB_RUN_ID:-0}"')
@@ -143,7 +143,7 @@ fi
 
 # seen <ticket> <track> <after run id>: a run of that title newer than <after> is listed.
 seen() {
-  gh run list --repo "$REPO" --workflow factory-implementer.yml --limit 20 --json databaseId,displayTitle \
+  gh run list --repo "$REPO" --workflow ${FACTORY_IMPLEMENTER_WORKFLOW:-factory-implementer.yml} --limit 20 --json databaseId,displayTitle \
     --jq "any(.[]; .databaseId > $3 and .displayTitle == \"implement #$1 (track $2)\")" | tr -d '\r' \
     | grep -qx true
 }
@@ -151,10 +151,10 @@ seen() {
 # dispatch <ticket> <track>: dispatch the Implementer and wait until the run is listed.
 dispatch() {
   local n=$1 t=$2 last waited=0 limit=${FACTORY_DISPATCH_SEEN_WAIT:-60}
-  last=$(gh run list --repo "$REPO" --workflow factory-implementer.yml --limit 1 --json databaseId \
+  last=$(gh run list --repo "$REPO" --workflow ${FACTORY_IMPLEMENTER_WORKFLOW:-factory-implementer.yml} --limit 1 --json databaseId \
     --jq '.[0].databaseId // 0' | tr -d '\r')
   echo "dispatch #$n on track $t"
-  gh workflow run factory-implementer.yml --repo "$REPO" -f track="$t" -f issue="$n" || {
+  gh workflow run ${FACTORY_IMPLEMENTER_WORKFLOW:-factory-implementer.yml} --repo "$REPO" -f track="$t" -f issue="$n" || {
     echo "::error::could not dispatch #$n"; return 1; }
   until seen "$n" "$t" "${last:-0}"; do
     if [ "$waited" -ge "$limit" ]; then
@@ -287,7 +287,7 @@ for s in $specs; do
   read -r total done < <(gh api "repos/$REPO/issues/$s" --jq '"\(.sub_issues_summary.total // 0) \(.sub_issues_summary.completed // 0)"')
   if [ "$total" -eq 0 ]; then
     running=$((running + 1))
-    going=$(gh run list --repo "$REPO" --workflow factory-decompose.yml --limit 20 --json status --jq '[.[] | select(.status != "completed")] | length')
+    going=$(gh run list --repo "$REPO" --workflow ${FACTORY_DECOMPOSE_WORKFLOW:-factory-decompose.yml} --limit 20 --json status --jq '[.[] | select(.status != "completed")] | length')
     if [ "$going" -gt 0 ]; then
       echo "::notice::spec #$s is still being decomposed"
       continue
@@ -295,7 +295,7 @@ for s in $specs; do
     # Its decompose stopped (budget, decision) or failed: start it again if the guard allows.
     if reason=$(go "$s"); then
       echo "decompose #$s again"
-      gh workflow run factory-decompose.yml --repo "$REPO" -f issue="$s"
+      gh workflow run ${FACTORY_DECOMPOSE_WORKFLOW:-factory-decompose.yml} --repo "$REPO" -f issue="$s"
     else
       echo "::notice::spec #$s has no tickets and may not be decomposed now ($reason)"
     fi
@@ -338,7 +338,7 @@ if [ $# -gt 0 ]; then
   fi
   echo "next spec: #$s"
   gh issue edit "$s" --repo "$REPO" --add-label "${L_SPEC}"
-  gh workflow run factory-decompose.yml --repo "$REPO" -f issue="$s"
+  gh workflow run ${FACTORY_DECOMPOSE_WORKFLOW:-factory-decompose.yml} --repo "$REPO" -f issue="$s"
   if [ $# -eq 1 ]; then
     notify "<!-- factory-queue-empty $s -->" "spec 큐 바닥남: #$s가 FACTORY_SPEC_QUEUE에 남은 마지막 spec이다. 공장은 #$s를 돌리는 중이고, 이것이 끝나면 할 일이 없다. 다음 spec을 FACTORY_SPEC_QUEUE에 넣는다."
   fi

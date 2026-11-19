@@ -13,4 +13,4 @@ if [ -e "$d/fail" ]; then echo "fake switchboard: sending is broken" >&2; exit 1
 args=$(for a in "$@"; do printf '%s' "$a" | jq -Rs .; done | jq -cs .) || exit 1
 jq -cn --arg p "${SWITCHBOARD_PROFILE:-}" --argjson a "$args" '{profile: $p, args: $a}' | tr -d '\r' >> "$d/sent.jsonl" \
   || exit 1
-echo "message 1 -> sandcorp/boss · pending"
+echo "message 1 -> team/lead · pending"
